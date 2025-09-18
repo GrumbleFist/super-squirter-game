@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Squirter Saves the Day - 1980s Platformer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            border: 3px solid #ffd700;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            background: #000;
+        }
+        
+        .game-container {
+            text-align: center;
+        }
+        
+        h1 {
+            color: #ffd700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            margin-bottom: 20px;
+            font-size: 2.5em;
+        }
+        
+        .controls {
+            color: #fff;
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+        
+        .controls h3 {
+            color: #ffd700;
+            margin-bottom: 10px;
+        }
+        
+        .controls p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>💧 SUPER SQUIRTER SAVES THE DAY 💧</h1>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="controls">
+            <h3>Controls:</h3>
+            <p><strong>Arrow Keys:</strong> Move left/right</p>
+            <p><strong>Up Arrow:</strong> Jump over robots</p>
+            <p><strong>X Key:</strong> Shoot water pistol / Start game / Continue</p>
+            <p><strong>Z Key:</strong> Activate energy shield</p>
+            <p><strong>Down Arrow:</strong> Go down stairs</p>
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html>
