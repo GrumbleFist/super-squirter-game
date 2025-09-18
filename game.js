@@ -1390,6 +1390,11 @@ class Game {
     }
     
     updateHero() {
+        // Don't allow movement during death animation
+        if (this.deathAnimation.active) {
+            return;
+        }
+        
         // Horizontal movement
         if (this.keys['ArrowLeft'] && this.hero.x > 0) {
             this.hero.x -= this.hero.speed;
@@ -1424,7 +1429,7 @@ class Game {
             this.hero.shootCooldown--;
         }
         
-        if (this.keys['KeyX'] && this.hero.canShoot && this.hero.shootCooldown === 0) {
+        if (this.keys['KeyX'] && this.hero.canShoot && this.hero.shootCooldown === 0 && !this.deathAnimation.active) {
             this.shoot();
             this.hero.shootCooldown = 20; // Cooldown frames
             this.playSound('shoot');
@@ -1436,7 +1441,7 @@ class Game {
         }
         
         // Activate shield with 'Z' key (UNLIMITED FOR TESTING)
-        if (this.keys['KeyZ']) { // && this.hero.shieldEnergy > 0 && this.hero.shieldCooldown === 0) {
+        if (this.keys['KeyZ'] && !this.deathAnimation.active) { // && this.hero.shieldEnergy > 0 && this.hero.shieldCooldown === 0) {
             if (!this.hero.shieldActive) {
                 this.playSound('shield'); // Play sound when shield activates
             }
