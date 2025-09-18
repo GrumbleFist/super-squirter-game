@@ -1653,7 +1653,24 @@ class Game {
         this.drillAttacks = this.drillAttacks.filter(attack => {
             attack.timer++;
             
-            if (attack.phase === 'ripples') {
+            if (attack.phase === 'traveling') {
+                // Move drill from mole position to target position
+                const dx = attack.targetX - attack.drillX;
+                const dy = attack.targetY - attack.drillY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > attack.drillSpeed) {
+                    // Move drill towards target
+                    attack.drillX += (dx / distance) * attack.drillSpeed;
+                    attack.drillY += (dy / distance) * attack.drillSpeed;
+                } else {
+                    // Drill has reached target - move to ripples phase
+                    attack.drillX = attack.targetX;
+                    attack.drillY = attack.targetY;
+                    attack.phase = 'ripples';
+                    attack.timer = 0;
+                }
+            } else if (attack.phase === 'ripples') {
                 // Create only one ripple at the start of the attack
                 if (!attack.rippleSpawned) {
                     // Create ripple only on the hero's current level - positioned on the floor
@@ -1790,11 +1807,11 @@ class Game {
         this.playerTargetPosition.x = this.hero.x + this.hero.width / 2;
         this.playerTargetPosition.y = this.hero.y + this.hero.height / 2; // Target hero's center height
         
-        // Create drill attack sequence with traveling ripples
+        // Create drill attack sequence with traveling drill
         this.drillAttacks.push({
             targetX: this.playerTargetPosition.x,
             targetY: this.playerTargetPosition.y,
-            phase: 'ripples', // ripples -> drilling -> burst
+            phase: 'traveling', // traveling -> ripples -> drilling -> burst
             timer: 0,
             ripples: [],
             drillProgress: 0,
@@ -1805,7 +1822,10 @@ class Game {
                 scraping: false,
                 burst: false
             },
-            // New properties for traveling ripples
+            // Traveling drill properties
+            drillX: this.robber.x + this.robber.width / 2, // Start from mole position
+            drillY: this.robber.y + this.robber.height / 2, // Start from mole position
+            drillSpeed: 4, // Pixels per frame
             rippleSpawned: false // Only spawn one ripple per attack
         });
         
@@ -2727,7 +2747,40 @@ class Game {
     renderDrillAttack(attack) {
         // Render underground drill attack with enhanced visual effects
         
-        if (attack.phase === 'ripples') {
+        if (attack.phase === 'traveling') {
+            // Render traveling drill
+            this.ctx.save();
+            
+            // Use drill PNG image if available
+            if (this.images.drill) {
+                // Calculate rotation angle based on movement direction
+                const dx = attack.targetX - attack.drillX;
+                const dy = attack.targetY - attack.drillY;
+                const angle = Math.atan2(dy, dx);
+                
+                this.ctx.translate(attack.drillX, attack.drillY);
+                this.ctx.rotate(angle);
+                this.ctx.drawImage(
+                    this.images.drill, 
+                    -20, -20, // Center the drill image
+                    40, 40
+                );
+            } else {
+                // Fallback to drawn drill
+                this.ctx.fillStyle = "#8B4513";
+                this.ctx.beginPath();
+                this.ctx.arc(attack.drillX, attack.drillY, 15, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // Drill tip
+                this.ctx.fillStyle = "#654321";
+                this.ctx.beginPath();
+                this.ctx.arc(attack.drillX, attack.drillY, 8, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+            
+            this.ctx.restore();
+        } else if (attack.phase === 'ripples') {
             // Render traveling ripples across all levels using PNG images
             attack.ripples.forEach(ripple => {
                 this.ctx.save();
