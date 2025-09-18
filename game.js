@@ -1694,7 +1694,7 @@ class Game {
     molemanStartDrillAttack() {
         // Start underground drill attack - create ripples across all levels
         this.playerTargetPosition.x = this.hero.x + this.hero.width / 2;
-        this.playerTargetPosition.y = this.hero.y + this.hero.height;
+        this.playerTargetPosition.y = this.hero.y + this.hero.height / 2; // Target hero's center height
         
         // Create drill attack sequence with traveling ripples
         this.drillAttacks.push({
@@ -1841,6 +1841,7 @@ class Game {
         this.drillAttacks.forEach((attack, attackIndex) => {
             if (attack.phase === 'burst') {
                 // Check if hero is in the danger zone (40 pixel radius)
+                // Use hero's current position, not the original target position
                 const distance = Math.sqrt(
                     Math.pow(this.hero.x + this.hero.width/2 - attack.targetX, 2) + 
                     Math.pow(this.hero.y + this.hero.height/2 - attack.targetY, 2)
@@ -2749,16 +2750,16 @@ class Game {
             const shakeY = (Math.random() - 0.5) * 4;
             this.ctx.translate(shakeX, shakeY);
             
-            // Position burst on the floor of the hero's level
+            // Position burst at the hero's height (middle of the level)
             const heroLevel = this.hero.level;
-            const floorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10;
+            const heroY = this.levels[heroLevel].y + this.levels[heroLevel].height / 2;
             
             // Large burst effect with multiple drill spikes using PNG images
             for (let i = 0; i < 12; i++) {
                 const angle = (i * Math.PI * 2) / 12;
                 const spikeLength = 60 + Math.sin(attack.burstTimer * 0.4) * 20; // Bigger pulsing effect
                 const spikeX = attack.targetX + Math.cos(angle) * spikeLength;
-                const spikeY = floorY + Math.sin(angle) * spikeLength;
+                const spikeY = heroY + Math.sin(angle) * spikeLength;
                 
                 // Use drill PNG image for spikes if available
                 if (this.images.drill) {
@@ -2792,16 +2793,16 @@ class Game {
                 this.ctx.drawImage(
                     this.images.burst,
                     attack.targetX - burstSize/2,
-                    floorY - burstSize/2,
+                    heroY - burstSize/2,
                     burstSize,
                     burstSize
                 );
             } else {
-                // Fallback to drawn explosion on the floor
+                // Fallback to drawn explosion at hero height
                 this.ctx.fillStyle = "#FF0000"; // Bright red danger zone
                 this.ctx.globalAlpha = 0.8;
                 this.ctx.beginPath();
-                this.ctx.arc(attack.targetX, floorY, 40, 0, Math.PI * 2);
+                this.ctx.arc(attack.targetX, heroY, 40, 0, Math.PI * 2);
                 this.ctx.fill();
                 
                 // Add explosion particles
@@ -2809,7 +2810,7 @@ class Game {
                     const angle = (i * Math.PI * 2) / 20;
                     const distance = 30 + Math.random() * 20;
                     const particleX = attack.targetX + Math.cos(angle) * distance;
-                    const particleY = floorY + Math.sin(angle) * distance;
+                    const particleY = heroY + Math.sin(angle) * distance;
                     
                     this.ctx.fillStyle = "#FFAA00";
                     this.ctx.beginPath();
