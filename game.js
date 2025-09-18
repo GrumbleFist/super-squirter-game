@@ -1561,23 +1561,22 @@ class Game {
                 if (attack.rippleSpawnTimer >= attack.rippleSpawnInterval && 
                     attack.ripples.length < attack.maxRipples) {
                     
-                    // Create ripples on all three levels - positioned on the floor
-                    for (let level = 0; level < 3; level++) {
-                        const levelFloorY = this.levels[level].y + this.levels[level].height - 10; // Floor of each level
-                        
-                        attack.ripples.push({
-                            x: this.robber.x + this.robber.width / 2, // Start from mole position
-                            y: levelFloorY, // On the floor of the level
-                            targetX: attack.targetX, // Travel toward hero's position
-                            targetY: levelFloorY, // Stay on the floor
-                            radius: 40, // Four times bigger (was 10)
-                            maxRadius: 160, // Four times bigger (was 40)
-                            opacity: 1.0,
-                            timer: 0,
-                            speed: 3, // Pixels per frame
-                            level: level
-                        });
-                    }
+                    // Create ripple only on the hero's current level - positioned on the floor
+                    const heroLevel = this.hero.level;
+                    const levelFloorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10; // Floor of hero's level
+                    
+                    attack.ripples.push({
+                        x: this.robber.x + this.robber.width / 2, // Start from mole position
+                        y: levelFloorY, // On the floor of the hero's level
+                        targetX: attack.targetX, // Travel toward hero's position
+                        targetY: levelFloorY, // Stay on the floor
+                        radius: 40, // Four times bigger (was 10)
+                        maxRadius: 160, // Four times bigger (was 40)
+                        opacity: 1.0,
+                        timer: 0,
+                        speed: 3, // Pixels per frame
+                        level: heroLevel
+                    });
                     
                     attack.rippleSpawnTimer = 0;
                 }
@@ -1714,7 +1713,7 @@ class Game {
             // New properties for traveling ripples
             rippleSpawnTimer: 0,
             rippleSpawnInterval: 30, // Spawn new ripple every 30 frames (0.5 seconds)
-            maxRipples: 6 // Maximum ripples on screen at once
+            maxRipples: 3 // Maximum ripples on screen at once (reduced since only one level)
         });
         
         this.playSound('drillFire'); // Sound 1: Drill firing
