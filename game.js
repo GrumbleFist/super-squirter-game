@@ -684,6 +684,11 @@ class Game {
     }
     
     startDeathAnimation() {
+        // Prevent multiple death animations - hero can only die once
+        if (this.deathAnimation.active) {
+            return;
+        }
+        
         this.deathAnimation.active = true;
         this.deathAnimation.timer = 0;
         this.deathAnimation.rotation = 0;
@@ -1866,8 +1871,8 @@ class Game {
         // Hero vs Robots (only collide if hero is on ground or falling)
         this.robots.forEach((robot, robotIndex) => {
             if (this.hero.level === robot.level && this.isColliding(this.hero, robot)) {
-                // Only take damage if hero is not jumping or is falling down
-                if (!this.hero.isJumping || this.hero.jumpVelocity > 0) {
+                // Only take damage if hero is not jumping or is falling down, and not already dead
+                if ((!this.hero.isJumping || this.hero.jumpVelocity > 0) && !this.deathAnimation.active) {
                     this.lives--;
                     this.robots.splice(robotIndex, 1);
                     this.playSound('hit');
@@ -1934,8 +1939,8 @@ class Game {
                     //     this.hero.shieldActive = false;
                     //     this.hero.shieldCooldown = 120;
                     // }
-                } else {
-                    // No shield - hero takes damage
+                } else if (!this.deathAnimation.active) {
+                    // No shield and not already dead - hero takes damage
                     this.lives--;
                     this.robberBullets.splice(bulletIndex, 1);
                     this.playSound('hit');
@@ -1968,8 +1973,8 @@ class Game {
                         //     this.hero.shieldActive = false;
                         //     this.hero.shieldCooldown = 120;
                         // }
-                    } else {
-                        // No shield - hero takes damage
+                    } else if (!this.deathAnimation.active) {
+                        // No shield and not already dead - hero takes damage
                         this.lives--;
                         this.playSound('hit');
                         
