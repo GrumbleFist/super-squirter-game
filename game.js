@@ -1561,17 +1561,17 @@ class Game {
                 if (attack.rippleSpawnTimer >= attack.rippleSpawnInterval && 
                     attack.ripples.length < attack.maxRipples) {
                     
-                    // Create ripples on all three levels
+                    // Create ripples on all three levels - positioned on the floor
                     for (let level = 0; level < 3; level++) {
-                        const levelY = this.levels[level].y + this.levels[level].height / 2;
+                        const levelFloorY = this.levels[level].y + this.levels[level].height - 10; // Floor of each level
                         
                         attack.ripples.push({
                             x: this.robber.x + this.robber.width / 2, // Start from mole position
-                            y: levelY,
+                            y: levelFloorY, // On the floor of the level
                             targetX: attack.targetX, // Travel toward hero's position
-                            targetY: levelY,
-                            radius: 10,
-                            maxRadius: 40,
+                            targetY: levelFloorY, // Stay on the floor
+                            radius: 40, // Four times bigger (was 10)
+                            maxRadius: 160, // Four times bigger (was 40)
                             opacity: 1.0,
                             timer: 0,
                             speed: 3, // Pixels per frame
@@ -2665,9 +2665,9 @@ class Game {
                 this.ctx.restore();
             });
             
-            // Show warning indicator on hero's current level
+            // Show warning indicator on hero's current level floor
             const heroLevel = this.hero.level;
-            const warningY = this.levels[heroLevel].y + this.levels[heroLevel].height / 2;
+            const warningY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10; // Floor of hero's level
             
             this.ctx.save();
             const pulse = Math.sin(attack.timer * 0.2) * 0.3 + 0.7;
@@ -2686,17 +2686,21 @@ class Game {
             // Show dramatic drilling progress with ground upheaval
             this.ctx.save();
             
-            // Draw large ground cracks spreading from target point
+            // Draw large ground cracks spreading from target point on the floor
             const crackLength = attack.drillProgress * 80;
             this.ctx.strokeStyle = "#8B4513";
             this.ctx.lineWidth = 4;
             
+            // Position cracks on the floor of the hero's level
+            const heroLevel = this.hero.level;
+            const floorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10;
+            
             for (let i = 0; i < 8; i++) {
                 const angle = (i * Math.PI * 2) / 8;
                 const startX = attack.targetX;
-                const startY = attack.targetY;
+                const startY = floorY;
                 const endX = startX + Math.cos(angle) * crackLength;
-                const endY = startY + Math.sin(angle) * crackLength;
+                const endY = floorY + Math.sin(angle) * crackLength;
                 
                 this.ctx.beginPath();
                 this.ctx.moveTo(startX, startY);
@@ -2704,9 +2708,9 @@ class Game {
                 this.ctx.stroke();
             }
             
-            // Show drilling indicator with spinning effect using PNG image
+            // Show drilling indicator with spinning effect using PNG image on the floor
             this.ctx.save();
-            this.ctx.translate(attack.targetX, attack.targetY);
+            this.ctx.translate(attack.targetX, floorY);
             this.ctx.rotate(attack.timer * 0.3); // Spinning drill
             
             // Use drill PNG image if available
@@ -2745,12 +2749,16 @@ class Game {
             const shakeY = (Math.random() - 0.5) * 4;
             this.ctx.translate(shakeX, shakeY);
             
+            // Position burst on the floor of the hero's level
+            const heroLevel = this.hero.level;
+            const floorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10;
+            
             // Large burst effect with multiple drill spikes using PNG images
             for (let i = 0; i < 12; i++) {
                 const angle = (i * Math.PI * 2) / 12;
                 const spikeLength = 60 + Math.sin(attack.burstTimer * 0.4) * 20; // Bigger pulsing effect
                 const spikeX = attack.targetX + Math.cos(angle) * spikeLength;
-                const spikeY = attack.targetY + Math.sin(angle) * spikeLength;
+                const spikeY = floorY + Math.sin(angle) * spikeLength;
                 
                 // Use drill PNG image for spikes if available
                 if (this.images.drill) {
@@ -2777,23 +2785,23 @@ class Game {
                 }
             }
             
-            // Large central burst area with explosion effect using PNG image
+            // Large central burst area with explosion effect using PNG image on the floor
             if (this.images.burst) {
                 // Use burst PNG image for the central explosion
                 const burstSize = 80 + Math.sin(attack.burstTimer * 0.4) * 20; // Pulsing effect
                 this.ctx.drawImage(
                     this.images.burst,
                     attack.targetX - burstSize/2,
-                    attack.targetY - burstSize/2,
+                    floorY - burstSize/2,
                     burstSize,
                     burstSize
                 );
             } else {
-                // Fallback to drawn explosion
+                // Fallback to drawn explosion on the floor
                 this.ctx.fillStyle = "#FF0000"; // Bright red danger zone
                 this.ctx.globalAlpha = 0.8;
                 this.ctx.beginPath();
-                this.ctx.arc(attack.targetX, attack.targetY, 40, 0, Math.PI * 2);
+                this.ctx.arc(attack.targetX, floorY, 40, 0, Math.PI * 2);
                 this.ctx.fill();
                 
                 // Add explosion particles
@@ -2801,7 +2809,7 @@ class Game {
                     const angle = (i * Math.PI * 2) / 20;
                     const distance = 30 + Math.random() * 20;
                     const particleX = attack.targetX + Math.cos(angle) * distance;
-                    const particleY = attack.targetY + Math.sin(angle) * distance;
+                    const particleY = floorY + Math.sin(angle) * distance;
                     
                     this.ctx.fillStyle = "#FFAA00";
                     this.ctx.beginPath();
