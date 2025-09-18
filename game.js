@@ -1678,15 +1678,14 @@ class Game {
             } else if (attack.phase === 'ripples') {
                 // Create only one ripple at the start of the attack
                 if (!attack.rippleSpawned) {
-                    // Create ripple only on the hero's current level - positioned on the floor
+                    // Create ripple at the drill's arrival position (where drill reached the floor)
                     const heroLevel = this.hero.level;
-                    const levelFloorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10; // Floor of hero's level
                     
                     attack.ripples.push({
-                        x: this.robber.x + this.robber.width / 2, // Start from mole position
-                        y: levelFloorY, // On the floor of the hero's level
-                        targetX: attack.targetX, // Travel toward hero's position
-                        targetY: levelFloorY, // Stay on the floor
+                        x: attack.targetX, // Start where drill arrived (hero's X position on floor)
+                        y: attack.targetY, // Start where drill arrived (floor level)
+                        targetX: attack.targetX, // Ripple expands from this position
+                        targetY: attack.targetY, // Stay on the floor
                         radius: 40, // Four times bigger (was 10)
                         maxRadius: 160, // Four times bigger (was 40)
                         opacity: 1.0,
@@ -1808,14 +1807,17 @@ class Game {
     }
     
     molemanStartDrillAttack() {
-        // Start underground drill attack - create ripples across all levels
+        // Start underground drill attack - drill travels to floor of hero's level
+        const heroLevel = this.hero.level;
+        const levelFloorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10; // Floor of hero's level
+        
         this.playerTargetPosition.x = this.hero.x + this.hero.width / 2;
-        this.playerTargetPosition.y = this.hero.y + this.hero.height / 2; // Target hero's center height
+        this.playerTargetPosition.y = this.hero.y + this.hero.height / 2; // Keep for burst damage calculation
         
         // Create drill attack sequence with traveling drill
         this.drillAttacks.push({
-            targetX: this.playerTargetPosition.x,
-            targetY: this.playerTargetPosition.y,
+            targetX: this.hero.x + this.hero.width / 2, // X position for ripple start
+            targetY: levelFloorY, // Y position on floor for ripple start
             phase: 'traveling', // traveling -> ripples -> drilling -> burst
             timer: 0,
             ripples: [],
