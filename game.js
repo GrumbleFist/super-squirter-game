@@ -703,6 +703,23 @@ class Game {
         this.playSound('sadTune');
     }
     
+    startRobberDeathAnimation() {
+        // Prevent multiple death animations
+        if (this.robber.deathAnimation.active) {
+            return;
+        }
+        
+        this.robber.deathAnimation.active = true;
+        this.robber.deathAnimation.timer = 0;
+        this.robber.deathAnimation.rotation = 0;
+        this.robber.deathAnimation.originalY = this.robber.y;
+        
+        // Calculate target Y position (floor of robber's level)
+        const robberLevel = this.robber.level;
+        this.robber.deathAnimation.targetY = this.levels[robberLevel].y + this.levels[robberLevel].height - this.robber.height;
+        this.robber.deathAnimation.falling = false;
+    }
+    
     updateDeathAnimation() {
         if (!this.deathAnimation.active) return;
         
@@ -727,6 +744,32 @@ class Game {
             this.deathAnimation.active = false;
             this.state = GAME_STATES.GAME_OVER;
             this.playSound('gameOver');
+        }
+    }
+    
+    updateRobberDeathAnimation() {
+        if (!this.robber.deathAnimation.active) return;
+        
+        this.robber.deathAnimation.timer++;
+        
+        // Rotate robber 90 degrees over time
+        this.robber.deathAnimation.rotation = Math.min(this.robber.deathAnimation.timer * 0.05, Math.PI / 2); // 90 degrees
+        
+        // Start falling after 15 frames (0.25 seconds)
+        if (this.robber.deathAnimation.timer > 15) {
+            this.robber.deathAnimation.falling = true;
+        }
+        
+        // Move robber to floor
+        if (this.robber.deathAnimation.falling) {
+            const fallProgress = Math.min((this.robber.deathAnimation.timer - 15) / 60, 1.0); // 1 second fall
+            this.robber.y = this.robber.deathAnimation.originalY + (this.robber.deathAnimation.targetY - this.robber.deathAnimation.originalY) * fallProgress;
+        }
+        
+        // End animation and start victory sequence
+        if (this.robber.deathAnimation.timer >= this.robber.deathAnimation.duration) {
+            this.robber.deathAnimation.active = false;
+            this.startVictoryAnimation();
         }
     }
     
@@ -1249,7 +1292,17 @@ class Game {
             burstMode: false,
             burstCount: 0,
             burstDelay: 0,
-            burstCooldown: 0
+            burstCooldown: 0,
+            // Death animation
+            deathAnimation: {
+                active: false,
+                timer: 0,
+                duration: 120, // 2 seconds at 60fps
+                rotation: 0,
+                targetY: 0,
+                originalY: 0,
+                falling: false
+            }
         };
     }
     
@@ -1371,12 +1424,20 @@ class Game {
         this.deathAnimation.active = false;
         this.deathAnimation.timer = 0;
         this.deathAnimation.rotation = 0;
+        
+        // Reset robber death animation
+        if (this.robber) {
+            this.robber.deathAnimation.active = false;
+            this.robber.deathAnimation.timer = 0;
+            this.robber.deathAnimation.rotation = 0;
+        }
     }
     
     update() {
         // Always update victory animation, death animation, bonus stage, and stage intros regardless of state
         this.updateVictoryAnimation();
         this.updateDeathAnimation();
+        this.updateRobberDeathAnimation();
         this.updateBonusStage();
         this.updateStage2Intro();
         this.updateStage3Intro();
@@ -1556,8 +1617,8 @@ class Game {
     }
     
     updateRobber() {
-        if (this.robber.defeated) {
-            // Robber is defeated - stop all movement
+        if (this.robber.defeated || this.robber.deathAnimation.active) {
+            // Robber is defeated or dying - stop all movement
             return;
         }
         
@@ -1920,7 +1981,7 @@ class Game {
                     
                     if (this.robber.health <= 0) {
                         this.robber.defeated = true;
-                        this.startVictoryAnimation();
+                        this.startRobberDeathAnimation();
                         this.playSound('cheer'); // Cheer sound when robber is defeated
                     }
                 }
@@ -2630,33 +2691,49 @@ class Game {
             } else {
                 robberImage = this.images.robber;
             }
+            // Apply death animation rotation if active
+            this.ctx.save();
+            if (this.robber.deathAnimation.active) {
+                this.ctx.translate(this.robber.x + this.robber.width / 2, this.robber.y + this.robber.height / 2);
+                this.ctx.rotate(this.robber.deathAnimation.rotation);
+                this.ctx.translate(-this.robber.width / 2, -this.robber.height / 2);
+            }
+            
             if (robberImage) {
-                // Normal direction-based flipping - same for all stages
-                if (this.robber.direction === -1) {
+                // Normal direction-based flipping - same for all stages (but not during death animation)
+                if (this.robber.direction === -1 && !this.robber.deathAnimation.active) {
                     this.ctx.save();
                     this.ctx.scale(-1, 1);
-                    this.ctx.drawImage(robberImage, -(this.robber.x + this.robber.width), this.robber.y, this.robber.width, this.robber.height);
+                    const drawX = this.robber.deathAnimation.active ? 0 : this.robber.x;
+                    const drawY = this.robber.deathAnimation.active ? 0 : this.robber.y;
+                    this.ctx.drawImage(robberImage, -(drawX + this.robber.width), drawY, this.robber.width, this.robber.height);
                     this.ctx.restore();
                 } else {
-                    this.ctx.drawImage(robberImage, this.robber.x, this.robber.y, this.robber.width, this.robber.height);
+                    const drawX = this.robber.deathAnimation.active ? 0 : this.robber.x;
+                    const drawY = this.robber.deathAnimation.active ? 0 : this.robber.y;
+                    this.ctx.drawImage(robberImage, drawX, drawY, this.robber.width, this.robber.height);
                 }
             } else {
                 // Fallback to colored rectangle
                 this.ctx.fillStyle = this.robber.color;
-                this.ctx.fillRect(this.robber.x, this.robber.y, this.robber.width, this.robber.height);
+                const drawX = this.robber.deathAnimation.active ? 0 : this.robber.x;
+                const drawY = this.robber.deathAnimation.active ? 0 : this.robber.y;
+                this.ctx.fillRect(drawX, drawY, this.robber.width, this.robber.height);
                 
                 // Robber details (eyes)
                 this.ctx.fillStyle = "#000";
-                if (this.robber.direction === 1) {
-                    // Facing right
-                    this.ctx.fillRect(this.robber.x + 10, this.robber.y + 10, 5, 5);
-                    this.ctx.fillRect(this.robber.x + 25, this.robber.y + 10, 5, 5);
+                if (this.robber.direction === 1 || this.robber.deathAnimation.active) {
+                    // Facing right or during death animation
+                    this.ctx.fillRect(drawX + 10, drawY + 10, 5, 5);
+                    this.ctx.fillRect(drawX + 25, drawY + 10, 5, 5);
                 } else {
                     // Facing left
-                    this.ctx.fillRect(this.robber.x + this.robber.width - 15, this.robber.y + 10, 5, 5);
-                    this.ctx.fillRect(this.robber.x + this.robber.width - 30, this.robber.y + 10, 5, 5);
+                    this.ctx.fillRect(drawX + this.robber.width - 15, drawY + 10, 5, 5);
+                    this.ctx.fillRect(drawX + this.robber.width - 30, drawY + 10, 5, 5);
                 }
             }
+            
+            this.ctx.restore();
             
             // Show robber health
             this.ctx.fillStyle = "#ffffff";
