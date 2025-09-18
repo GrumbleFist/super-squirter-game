@@ -1256,6 +1256,7 @@ class Game {
             shieldActive: false,
             shieldEnergy: 100,
             shieldCooldown: 0,
+            health: 3, // Health points per life
             // Jumping mechanics
             isJumping: false,
             jumpVelocity: 0,
@@ -1936,19 +1937,68 @@ class Game {
         this.playSound('fire'); // Fire sound for robber's fireballs
     }
     
+    takeDamage() {
+        // Reduce health first
+        this.hero.health--;
+        this.playSound('hit');
+        
+        if (this.hero.health <= 0) {
+            // Health depleted - lose a life and restart stage
+            this.lives--;
+            this.hero.health = 3; // Reset health for new life
+            
+            if (this.lives <= 0) {
+                // All lives lost - game over
+                this.startDeathAnimation();
+            } else {
+                // Restart current stage
+                this.restartStage();
+            }
+        }
+    }
+    
+    restartStage() {
+        // Reset hero position and state
+        this.hero.x = 100;
+        this.hero.y = 50;
+        this.hero.level = 0;
+        this.hero.isJumping = false;
+        this.hero.jumpVelocity = 0;
+        this.hero.shieldActive = false;
+        this.hero.shieldEnergy = 100;
+        this.hero.shieldCooldown = 0;
+        
+        // Clear all enemies and bullets
+        this.robots = [];
+        this.bullets = [];
+        this.robberBullets = [];
+        this.drillAttacks = [];
+        
+        // Reset death animation
+        this.deathAnimation.active = false;
+        this.deathAnimation.timer = 0;
+        this.deathAnimation.rotation = 0;
+        this.deathAnimation.falling = false;
+        
+        // Reset robber if it exists
+        if (this.robber) {
+            this.robber.defeated = false;
+            this.robber.health = 3;
+            this.robber.deathAnimation.active = false;
+            this.robber.deathAnimation.timer = 0;
+            this.robber.deathAnimation.rotation = 0;
+            this.robber.deathAnimation.falling = false;
+        }
+    }
+
     checkCollisions() {
         // Hero vs Robots (only collide if hero is on ground or falling)
         this.robots.forEach((robot, robotIndex) => {
             if (this.hero.level === robot.level && this.isColliding(this.hero, robot)) {
                 // Only take damage if hero is not jumping or is falling down, and not already dead
                 if ((!this.hero.isJumping || this.hero.jumpVelocity > 0) && !this.deathAnimation.active) {
-                    this.lives--;
+                    this.takeDamage();
                     this.robots.splice(robotIndex, 1);
-                    this.playSound('hit');
-                    
-                    if (this.lives <= 0) {
-                        this.startDeathAnimation();
-                    }
                 } else {
                     // Hero is jumping over the robot - give bonus points!
                     this.robots.splice(robotIndex, 1);
@@ -2010,13 +2060,8 @@ class Game {
                     // }
                 } else if (!this.deathAnimation.active) {
                     // No shield and not already dead - hero takes damage
-                    this.lives--;
+                    this.takeDamage();
                     this.robberBullets.splice(bulletIndex, 1);
-                    this.playSound('hit');
-                    
-                    if (this.lives <= 0) {
-                        this.startDeathAnimation();
-                    }
                 }
             }
         });
@@ -2044,15 +2089,10 @@ class Game {
                         // }
                     } else if (!this.deathAnimation.active) {
                         // No shield and not already dead - hero takes damage
-                        this.lives--;
-                        this.playSound('hit');
+                        this.takeDamage();
                         
                         // Add visual damage feedback
                         this.createExplosion(this.hero.x + this.hero.width/2, this.hero.y + this.hero.height/2);
-                        
-                        if (this.lives <= 0) {
-                            this.startDeathAnimation();
-                        }
                     }
                 }
             }
@@ -2753,17 +2793,18 @@ class Game {
         this.ctx.textAlign = "left";
         this.ctx.fillText(`Score: ${this.score}`, 10, 30);
         this.ctx.fillText(`Lives: ${this.lives}`, 10, 50);
-        this.ctx.fillText(`Stage: ${this.currentStage} | Level: ${this.hero.level + 1}`, 10, 70);
+        this.ctx.fillText(`Health: ${this.hero.health}`, 10, 70);
+        this.ctx.fillText(`Stage: ${this.currentStage} | Level: ${this.hero.level + 1}`, 10, 90);
         
         // Shield energy bar
         this.ctx.fillStyle = "#0066ff";
-        this.ctx.fillRect(10, 90, this.hero.shieldEnergy, 10);
+        this.ctx.fillRect(10, 110, this.hero.shieldEnergy, 10);
         this.ctx.strokeStyle = "#ffffff";
         this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(10, 90, 100, 10);
+        this.ctx.strokeRect(10, 110, 100, 10);
         this.ctx.fillStyle = "#ffffff";
         this.ctx.font = "12px Courier New";
-        this.ctx.fillText("Shield", 10, 85);
+        this.ctx.fillText("Shield", 10, 105);
         
         // Render victory animation if active
         if (this.victoryAnimation.active) {
@@ -3392,10 +3433,11 @@ class Game {
         // Spawn aliens (robots) - more of them
         this.spawnRobots(6); // 6 aliens for level 2
         
-        // Reset hero position
+        // Reset hero position and health
         this.hero.level = 0;
         this.hero.x = 100;
         this.hero.y = 50;
+        this.hero.health = 3; // Reset health for new stage
         
         // Reset score and lives
         this.score = 0;
@@ -3439,10 +3481,11 @@ class Game {
         // Spawn more worm henchmen for increased difficulty
         this.spawnRobots(8); // 8 worms instead of 4
         
-        // Reset hero position
+        // Reset hero position and health
         this.hero.x = 50;
         this.hero.y = 50;
         this.hero.level = 0;
+        this.hero.health = 3; // Reset health for new stage
         this.score = 0;
         this.lives = 3;
     }
