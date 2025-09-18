@@ -29,6 +29,10 @@ class Game {
         this.currentStage = 1; // Track which stage we're on (1 or 2)
         this.levels = [];
         
+        // Drill attack system for mole boss
+        this.drillAttacks = []; // Array to track active drill attacks
+        this.playerTargetPosition = { x: 0, y: 0 }; // Where player was when drill was fired
+        
         // Victory animation
         this.victoryAnimation = {
             active: false,
@@ -1126,6 +1130,7 @@ class Game {
         this.bullets = [];
         this.robberBullets = [];
         this.robots = [];
+        this.drillAttacks = []; // Reset drill attacks
         
         // Reset to Stage 1 levels (Bank)
         this.createLevels();
@@ -1182,6 +1187,7 @@ class Game {
         this.updateRobber();
         this.updateBullets();
         this.updateRobberBullets();
+        this.updateDrillAttacks();
         this.checkCollisions();
         this.checkLevelCompletion();
     }
@@ -1441,6 +1447,61 @@ class Game {
         });
     }
     
+    updateDrillAttacks() {
+        this.drillAttacks = this.drillAttacks.filter(attack => {
+            attack.timer++;
+            
+            if (attack.phase === 'ripples') {
+                // Create expanding ripples for 2 seconds
+                if (attack.timer % 10 === 0 && attack.timer < 120) { // Every 10 frames for 2 seconds
+                    const rippleRadius = (attack.timer / 10) * 15; // Growing ripples
+                    attack.ripples.push({
+                        x: attack.targetX,
+                        y: attack.targetY,
+                        radius: rippleRadius,
+                        maxRadius: rippleRadius + 30,
+                        opacity: 1.0 - (attack.timer / 120) * 0.7,
+                        timer: 0
+                    });
+                }
+                
+                // Move to drilling phase after ripples
+                if (attack.timer >= 120) {
+                    attack.phase = 'drilling';
+                    attack.timer = 0;
+                }
+            } else if (attack.phase === 'drilling') {
+                // Drilling phase - show progress for 1.5 seconds
+                attack.drillProgress = Math.min(attack.timer / 90, 1.0); // 1.5 seconds
+                
+                // Move to burst phase
+                if (attack.timer >= 90) {
+                    attack.phase = 'burst';
+                    attack.burstActive = true;
+                    attack.burstTimer = 0;
+                    attack.timer = 0;
+                }
+            } else if (attack.phase === 'burst') {
+                // Burst phase - dangerous area for 1 second
+                attack.burstTimer++;
+                
+                // End attack after burst phase
+                if (attack.burstTimer >= 60) { // 1 second
+                    return false; // Remove this attack
+                }
+            }
+            
+            // Update ripple animations
+            attack.ripples = attack.ripples.filter(ripple => {
+                ripple.timer++;
+                ripple.opacity -= 0.02;
+                return ripple.opacity > 0;
+            });
+            
+            return true; // Keep this attack
+        });
+    }
+    
     updateMutantBurstFiring() {
         // Burst firing system for mutant (Level 2)
         if (this.robber.burstCooldown > 0) {
@@ -1474,29 +1535,34 @@ class Game {
     }
     
     updateMolemanDrillFiring() {
-        // Drill firing system for moleman (Level 3)
+        // Underground drill attack system for moleman (Level 3)
         if (this.robber.canShoot && this.robber.shootCooldown === 0) {
             const currentTime = Date.now();
-            if (currentTime - this.robber.lastShotTime >= 1500) { // 1.5 second delay between drill shots
-                this.molemanShootDrill();
-                this.robber.shootCooldown = 60; // 1 second cooldown
+            if (currentTime - this.robber.lastShotTime >= 4000) { // 4 second delay between drill attacks (much slower)
+                this.molemanStartDrillAttack();
+                this.robber.shootCooldown = 240; // 4 second cooldown
                 this.robber.lastShotTime = currentTime;
             }
         }
     }
     
-    molemanShootDrill() {
-        // Moleman shoots drill projectiles
-        this.robberBullets.push({
-            x: this.robber.x,
-            y: this.robber.y + this.robber.height / 2,
-            width: 25,
-            height: 25,
-            speed: 5,
-            color: "#8B4513", // Brown drill color
-            level: 2,
-            isDrill: true // Mark as drill bullet
+    molemanStartDrillAttack() {
+        // Start underground drill attack - target where player was standing
+        this.playerTargetPosition.x = this.hero.x + this.hero.width / 2;
+        this.playerTargetPosition.y = this.hero.y + this.hero.height;
+        
+        // Create drill attack sequence
+        this.drillAttacks.push({
+            targetX: this.playerTargetPosition.x,
+            targetY: this.playerTargetPosition.y,
+            phase: 'ripples', // ripples -> drilling -> burst
+            timer: 0,
+            ripples: [],
+            drillProgress: 0,
+            burstActive: false,
+            burstTimer: 0
         });
+        
         this.playSound('drill'); // Drill sound
     }
     
@@ -1612,6 +1678,40 @@ class Game {
                     if (this.lives <= 0) {
                         this.state = GAME_STATES.GAME_OVER;
                         this.playSound('gameOver');
+                    }
+                }
+            }
+        });
+        
+        // Drill attacks vs Hero (only during burst phase)
+        this.drillAttacks.forEach((attack, attackIndex) => {
+            if (attack.phase === 'burst' && this.hero.level === 2) {
+                // Check if hero is in the danger zone (25 pixel radius)
+                const distance = Math.sqrt(
+                    Math.pow(this.hero.x + this.hero.width/2 - attack.targetX, 2) + 
+                    Math.pow(this.hero.y + this.hero.height/2 - attack.targetY, 2)
+                );
+                
+                if (distance <= 25) {
+                    // Check if shield is active
+                    if (this.hero.shieldActive) {
+                        // Shield blocks the drill burst
+                        this.playSound('shield'); // Shield block sound
+                        // Shield takes some damage (DISABLED FOR TESTING)
+                        // this.hero.shieldEnergy -= 30;
+                        // if (this.hero.shieldEnergy <= 0) {
+                        //     this.hero.shieldActive = false;
+                        //     this.hero.shieldCooldown = 120;
+                        // }
+                    } else {
+                        // No shield - hero takes damage
+                        this.lives--;
+                        this.playSound('hit');
+                        
+                        if (this.lives <= 0) {
+                            this.state = GAME_STATES.GAME_OVER;
+                            this.playSound('gameOver');
+                        }
                     }
                 }
             }
@@ -2226,6 +2326,11 @@ class Game {
             }
         });
         
+        // Render drill attacks (underground ripples and burst)
+        this.drillAttacks.forEach(attack => {
+            this.renderDrillAttack(attack);
+        });
+        
         // Render robber
         if (!this.robber.defeated) {
             let robberImage;
@@ -2355,6 +2460,103 @@ class Game {
         
         // Restore context
         this.ctx.restore();
+    }
+    
+    renderDrillAttack(attack) {
+        // Render underground drill attack with ripples and burst
+        
+        if (attack.phase === 'ripples') {
+            // Render expanding ripples underground
+            attack.ripples.forEach(ripple => {
+                this.ctx.save();
+                this.ctx.globalAlpha = ripple.opacity;
+                
+                // Draw ripple as expanding circles
+                this.ctx.strokeStyle = "#8B4513"; // Brown color
+                this.ctx.lineWidth = 3;
+                this.ctx.beginPath();
+                this.ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
+                this.ctx.stroke();
+                
+                // Add inner circle for depth effect
+                this.ctx.strokeStyle = "#654321"; // Darker brown
+                this.ctx.lineWidth = 1;
+                this.ctx.beginPath();
+                this.ctx.arc(ripple.x, ripple.y, ripple.radius * 0.7, 0, Math.PI * 2);
+                this.ctx.stroke();
+                
+                this.ctx.restore();
+            });
+            
+            // Show warning indicator on ground
+            this.ctx.save();
+            this.ctx.globalAlpha = 0.8;
+            this.ctx.fillStyle = "#FF4444"; // Red warning
+            this.ctx.fillRect(attack.targetX - 20, attack.targetY - 5, 40, 10);
+            this.ctx.restore();
+            
+        } else if (attack.phase === 'drilling') {
+            // Show drilling progress with ground cracks
+            this.ctx.save();
+            this.ctx.strokeStyle = "#8B4513";
+            this.ctx.lineWidth = 2;
+            
+            // Draw ground cracks spreading from target point
+            const crackLength = attack.drillProgress * 50;
+            for (let i = 0; i < 6; i++) {
+                const angle = (i * Math.PI * 2) / 6;
+                const startX = attack.targetX;
+                const startY = attack.targetY;
+                const endX = startX + Math.cos(angle) * crackLength;
+                const endY = startY + Math.sin(angle) * crackLength;
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(startX, startY);
+                this.ctx.lineTo(endX, endY);
+                this.ctx.stroke();
+            }
+            
+            // Show drilling indicator
+            this.ctx.fillStyle = "#654321";
+            this.ctx.fillRect(attack.targetX - 15, attack.targetY - 8, 30, 16);
+            
+            this.ctx.restore();
+            
+        } else if (attack.phase === 'burst') {
+            // Render dangerous drill burst from underground
+            this.ctx.save();
+            
+            // Burst effect with multiple drill spikes
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * Math.PI * 2) / 8;
+                const spikeLength = 40 + Math.sin(attack.burstTimer * 0.3) * 10; // Pulsing effect
+                const spikeX = attack.targetX + Math.cos(angle) * spikeLength;
+                const spikeY = attack.targetY + Math.sin(angle) * spikeLength;
+                
+                // Draw drill spike
+                this.ctx.strokeStyle = "#8B4513";
+                this.ctx.lineWidth = 4;
+                this.ctx.beginPath();
+                this.ctx.moveTo(attack.targetX, attack.targetY);
+                this.ctx.lineTo(spikeX, spikeY);
+                this.ctx.stroke();
+                
+                // Add drill tip
+                this.ctx.fillStyle = "#654321";
+                this.ctx.beginPath();
+                this.ctx.arc(spikeX, spikeY, 3, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+            
+            // Central burst area
+            this.ctx.fillStyle = "#FF4444"; // Red danger zone
+            this.ctx.globalAlpha = 0.6;
+            this.ctx.beginPath();
+            this.ctx.arc(attack.targetX, attack.targetY, 25, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            this.ctx.restore();
+        }
     }
     
     renderVictoryAnimation() {
