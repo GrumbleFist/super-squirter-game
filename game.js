@@ -769,6 +769,7 @@ class Game {
         // End animation and start victory sequence
         if (this.robber.deathAnimation.timer >= this.robber.deathAnimation.duration) {
             this.robber.deathAnimation.active = false;
+            this.playSound('cheer'); // Play cheer sound when death animation completes
             this.startVictoryAnimation();
         }
     }
@@ -1265,6 +1266,10 @@ class Game {
     }
     
     createRobber(health = 3) {
+        // Preserve death animation state if robber is currently dying
+        const wasDying = this.robber && this.robber.deathAnimation && this.robber.deathAnimation.active;
+        const deathAnimationState = wasDying ? this.robber.deathAnimation : null;
+        
         this.robber = {
             x: 400,
             y: 420, // Position on the vault level (level 2)
@@ -1294,7 +1299,7 @@ class Game {
             burstDelay: 0,
             burstCooldown: 0,
             // Death animation
-            deathAnimation: {
+            deathAnimation: deathAnimationState || {
                 active: false,
                 timer: 0,
                 duration: 120, // 2 seconds at 60fps
@@ -1983,7 +1988,7 @@ class Game {
                     if (this.robber.health <= 0) {
                         this.robber.defeated = true;
                         this.startRobberDeathAnimation();
-                        this.playSound('cheer'); // Cheer sound when robber is defeated
+                        // Cheer sound will play when death animation completes
                     }
                 }
             });
@@ -2682,8 +2687,8 @@ class Game {
             this.renderDrillAttack(attack);
         });
         
-        // Render robber
-        if (!this.robber.defeated) {
+        // Render robber (show during death animation too)
+        if (!this.robber.defeated || this.robber.deathAnimation.active) {
             let robberImage;
             if (this.currentStage === 2) {
                 robberImage = this.images.mutant;
