@@ -1720,46 +1720,59 @@ class Game {
             attack.timer++;
             
             if (attack.phase === 'traveling') {
-                // Move drill from mole position to target position
-                const dx = attack.targetX - attack.drillX;
-                const dy = attack.targetY - attack.drillY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance > attack.drillSpeed) {
-                    // Move drill towards target
-                    attack.drillX += (dx / distance) * attack.drillSpeed;
-                    attack.drillY += (dy / distance) * attack.drillSpeed;
+                // Drill moves vertically down to the floor
+                if (attack.drillY < attack.drillTargetY) {
+                    attack.drillY += attack.drillSpeed;
                 } else {
-                    // Drill has reached target - move to ripples phase
-                    attack.drillX = attack.targetX;
-                    attack.drillY = attack.targetY;
+                    // Drill has reached the floor - move to ripples phase
+                    attack.drillY = attack.drillTargetY;
                     attack.phase = 'ripples';
                     attack.timer = 0;
                 }
             } else if (attack.phase === 'ripples') {
-                // Create only one ripple at the start of the attack
+                // Create ripple when phase starts
                 if (!attack.rippleSpawned) {
-                    // Create ripple at the drill's arrival position (where drill reached the floor)
                     const heroLevel = this.hero.level;
                     
                     attack.ripples.push({
-                        x: attack.targetX, // Start where drill arrived (hero's X position on floor)
-                        y: attack.targetY, // Start where drill arrived (floor level)
-                        targetX: attack.targetX, // Ripple expands from this position
-                        targetY: attack.targetY, // Stay on the floor
-                        radius: 40, // Four times bigger (was 10)
-                        maxRadius: 160, // Four times bigger (was 40)
+                        x: attack.rippleX, // Start where drill landed
+                        y: attack.rippleY, // On the floor
+                        targetX: attack.rippleTargetX, // Move to hero's original position
+                        targetY: attack.rippleY, // Stay on the floor
+                        radius: 40,
+                        maxRadius: 160,
                         opacity: 1.0,
                         timer: 0,
-                        speed: 3, // Pixels per frame
-                        level: heroLevel
+                        speed: attack.rippleSpeed, // 50% faster
+                        level: heroLevel,
+                        moving: true // Ripple is moving horizontally
                     });
                     
-                    attack.rippleSpawned = true; // Mark that ripple has been spawned
+                    attack.rippleSpawned = true;
                 }
                 
-                // Move to drilling phase after 3 seconds of ripples
-                if (attack.timer >= 180) { // 3 seconds at 60fps
+                // Update ripple movement
+                attack.ripples.forEach(ripple => {
+                    if (ripple.moving) {
+                        // Move ripple horizontally toward hero's original position
+                        const dx = ripple.targetX - ripple.x;
+                        if (Math.abs(dx) > ripple.speed) {
+                            ripple.x += (dx > 0 ? ripple.speed : -ripple.speed);
+                        } else {
+                            // Ripple has reached destination - start expanding
+                            ripple.x = ripple.targetX;
+                            ripple.moving = false;
+                        }
+                    } else {
+                        // Ripple is expanding
+                        ripple.radius += 0.5;
+                        ripple.opacity -= 0.02;
+                    }
+                });
+                
+                // Move to drilling phase after ripple reaches destination
+                const ripple = attack.ripples[0];
+                if (ripple && !ripple.moving && attack.timer >= 60) { // 1 second after ripple stops moving
                     attack.phase = 'drilling';
                     attack.timer = 0;
                 }
@@ -1770,11 +1783,11 @@ class Game {
                     attack.soundPlayed.scraping = true;
                 }
                 
-                // Drilling phase - show progress for 1.5 seconds
-                attack.drillProgress = Math.min(attack.timer / 90, 1.0); // 1.5 seconds
+                // Drilling phase - show progress for 1 second (faster)
+                attack.drillProgress = Math.min(attack.timer / 60, 1.0); // 1 second
                 
                 // Move to burst phase
-                if (attack.timer >= 90) {
+                if (attack.timer >= 60) {
                     attack.phase = 'burst';
                     attack.burstActive = true;
                     attack.burstTimer = 0;
@@ -1787,37 +1800,14 @@ class Game {
                     attack.soundPlayed.burst = true;
                 }
                 
-                // Burst phase - dangerous area for 1 second
+                // Burst phase - dangerous area for 0.5 seconds (faster)
                 attack.burstTimer++;
                 
                 // End attack after burst phase
-                if (attack.burstTimer >= 60) { // 1 second
+                if (attack.burstTimer >= 30) { // 0.5 seconds
                     return false; // Remove this attack
                 }
             }
-            
-            // Update ripple animations - make them travel horizontally
-            attack.ripples = attack.ripples.filter(ripple => {
-                ripple.timer++;
-                
-                // Move ripple toward target position
-                const dx = ripple.targetX - ripple.x;
-                const dy = ripple.targetY - ripple.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance > ripple.speed) {
-                    // Move toward target
-                    ripple.x += (dx / distance) * ripple.speed;
-                    ripple.y += (dy / distance) * ripple.speed;
-                } else {
-                    // Reached target, start expanding
-                    ripple.radius += 0.5;
-                    ripple.opacity -= 0.02;
-                }
-                
-                // Remove ripple if it's too faded or too large
-                return ripple.opacity > 0 && ripple.radius < ripple.maxRadius;
-            });
             
             return true; // Keep this attack
         });
@@ -1868,17 +1858,32 @@ class Game {
     }
     
     molemanStartDrillAttack() {
-        // Start underground drill attack - drill travels to floor of hero's level
+        // Start underground drill attack - drill moves vertically, ripple moves horizontally
         const heroLevel = this.hero.level;
         const levelFloorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10; // Floor of hero's level
         
-        this.playerTargetPosition.x = this.hero.x + this.hero.width / 2;
-        this.playerTargetPosition.y = this.hero.y + this.hero.height / 2; // Keep for burst damage calculation
+        // Store hero's position when gun was fired (for ripple destination)
+        const heroOriginalX = this.hero.x + this.hero.width / 2;
+        const heroOriginalY = this.hero.y + this.hero.height / 2; // Keep for burst damage calculation
         
-        // Create drill attack sequence with traveling drill
+        this.playerTargetPosition.x = heroOriginalX;
+        this.playerTargetPosition.y = heroOriginalY;
+        
+        // Create drill attack sequence
         this.drillAttacks.push({
-            targetX: this.hero.x + this.hero.width / 2, // X position for ripple start
-            targetY: levelFloorY, // Y position on floor for ripple start
+            // Drill movement (vertical only)
+            drillX: this.robber.x + this.robber.width / 2, // Start from mole position
+            drillY: this.robber.y + this.robber.height / 2, // Start from mole position
+            drillTargetY: levelFloorY, // Drill moves vertically to floor
+            drillSpeed: 6, // 50% faster (was 4)
+            
+            // Ripple movement (horizontal only)
+            rippleX: this.robber.x + this.robber.width / 2, // Ripple starts where drill lands
+            rippleY: levelFloorY, // Ripple stays on floor
+            rippleTargetX: heroOriginalX, // Ripple moves to hero's original position
+            rippleSpeed: 4.5, // 50% faster (was 3)
+            
+            // Attack phases
             phase: 'traveling', // traveling -> ripples -> drilling -> burst
             timer: 0,
             ripples: [],
@@ -1890,11 +1895,7 @@ class Game {
                 scraping: false,
                 burst: false
             },
-            // Traveling drill properties
-            drillX: this.robber.x + this.robber.width / 2, // Start from mole position
-            drillY: this.robber.y + this.robber.height / 2, // Start from mole position
-            drillSpeed: 4, // Pixels per frame
-            rippleSpawned: false // Only spawn one ripple per attack
+            rippleSpawned: false
         });
         
         this.playSound('drillFire'); // Sound 1: Drill firing
@@ -2832,18 +2833,14 @@ class Game {
         // Render underground drill attack with enhanced visual effects
         
         if (attack.phase === 'traveling') {
-            // Render traveling drill
+            // Render traveling drill (moving vertically down)
             this.ctx.save();
             
             // Use drill PNG image if available
             if (this.images.drill) {
-                // Calculate rotation angle based on movement direction
-                const dx = attack.targetX - attack.drillX;
-                const dy = attack.targetY - attack.drillY;
-                const angle = Math.atan2(dy, dx);
-                
+                // Drill points downward (vertical movement)
                 this.ctx.translate(attack.drillX, attack.drillY);
-                this.ctx.rotate(angle);
+                this.ctx.rotate(Math.PI / 2); // Point downward
                 this.ctx.drawImage(
                     this.images.drill, 
                     -20, -20, // Center the drill image
