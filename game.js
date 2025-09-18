@@ -2025,10 +2025,10 @@ class Game {
         this.drillAttacks.forEach((attack, attackIndex) => {
             if (attack.phase === 'burst') {
                 // Check if hero is in the danger zone (40 pixel radius)
-                // Use hero's current position, not the original target position
+                // Use hero's current position against the burst location
                 const distance = Math.sqrt(
-                    Math.pow(this.hero.x + this.hero.width/2 - attack.targetX, 2) + 
-                    Math.pow(this.hero.y + this.hero.height/2 - attack.targetY, 2)
+                    Math.pow(this.hero.x + this.hero.width/2 - attack.rippleTargetX, 2) + 
+                    Math.pow(this.hero.y + this.hero.height/2 - (this.levels[this.hero.level].y + this.levels[this.hero.level].height / 2), 2)
                 );
                 
                 if (distance <= 40) { // Damage radius to match visual effect
@@ -2917,13 +2917,13 @@ class Game {
             const pulse = Math.sin(attack.timer * 0.2) * 0.3 + 0.7;
             this.ctx.globalAlpha = pulse;
             this.ctx.fillStyle = "#FF0000"; // Bright red warning
-            this.ctx.fillRect(attack.targetX - 30, warningY - 8, 60, 16);
+            this.ctx.fillRect(attack.rippleTargetX - 30, warningY - 8, 60, 16);
             
             // Add warning text
             this.ctx.fillStyle = "#FFFFFF";
             this.ctx.font = "bold 12px Courier New";
             this.ctx.textAlign = "center";
-            this.ctx.fillText("DRILL!", attack.targetX, warningY + 4);
+            this.ctx.fillText("DRILL!", attack.rippleTargetX, warningY + 4);
             this.ctx.restore();
             
         } else if (attack.phase === 'drilling') {
@@ -2941,7 +2941,7 @@ class Game {
             
             for (let i = 0; i < 8; i++) {
                 const angle = (i * Math.PI * 2) / 8;
-                const startX = attack.targetX;
+                const startX = attack.rippleTargetX;
                 const startY = floorY;
                 const endX = startX + Math.cos(angle) * crackLength;
                 const endY = floorY + Math.sin(angle) * crackLength;
@@ -2954,7 +2954,7 @@ class Game {
             
             // Show drilling indicator with spinning effect using PNG image on the floor
             this.ctx.save();
-            this.ctx.translate(attack.targetX, floorY);
+            this.ctx.translate(attack.rippleTargetX, floorY);
             this.ctx.rotate(attack.timer * 0.3); // Spinning drill
             
             // Use drill PNG image if available
@@ -3001,7 +3001,7 @@ class Game {
             for (let i = 0; i < 12; i++) {
                 const angle = (i * Math.PI * 2) / 12;
                 const spikeLength = 60 + Math.sin(attack.burstTimer * 0.4) * 20; // Bigger pulsing effect
-                const spikeX = attack.targetX + Math.cos(angle) * spikeLength;
+                const spikeX = attack.rippleTargetX + Math.cos(angle) * spikeLength;
                 const spikeY = heroY + Math.sin(angle) * spikeLength;
                 
                 // Use drill PNG image for spikes if available
@@ -3017,7 +3017,7 @@ class Game {
                     this.ctx.strokeStyle = "#8B4513";
                     this.ctx.lineWidth = 6;
                     this.ctx.beginPath();
-                    this.ctx.moveTo(attack.targetX, attack.targetY);
+                    this.ctx.moveTo(attack.rippleTargetX, attack.rippleY);
                     this.ctx.lineTo(spikeX, spikeY);
                     this.ctx.stroke();
                     
@@ -3035,7 +3035,7 @@ class Game {
                 const burstSize = 80 + Math.sin(attack.burstTimer * 0.4) * 20; // Pulsing effect
                 this.ctx.drawImage(
                     this.images.burst,
-                    attack.targetX - burstSize/2,
+                    attack.rippleTargetX - burstSize/2,
                     heroY - burstSize/2,
                     burstSize,
                     burstSize
@@ -3045,14 +3045,14 @@ class Game {
                 this.ctx.fillStyle = "#FF0000"; // Bright red danger zone
                 this.ctx.globalAlpha = 0.8;
                 this.ctx.beginPath();
-                this.ctx.arc(attack.targetX, heroY, 40, 0, Math.PI * 2);
+                this.ctx.arc(attack.rippleTargetX, heroY, 40, 0, Math.PI * 2);
                 this.ctx.fill();
                 
                 // Add explosion particles
                 for (let i = 0; i < 20; i++) {
                     const angle = (i * Math.PI * 2) / 20;
                     const distance = 30 + Math.random() * 20;
-                    const particleX = attack.targetX + Math.cos(angle) * distance;
+                    const particleX = attack.rippleTargetX + Math.cos(angle) * distance;
                     const particleY = heroY + Math.sin(angle) * distance;
                     
                     this.ctx.fillStyle = "#FFAA00";
