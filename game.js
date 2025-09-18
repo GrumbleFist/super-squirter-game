@@ -1550,21 +1550,36 @@ class Game {
             attack.timer++;
             
             if (attack.phase === 'ripples') {
-                // Create expanding ripples for 2 seconds
-                if (attack.timer % 10 === 0 && attack.timer < 120) { // Every 10 frames for 2 seconds
-                    const rippleRadius = (attack.timer / 10) * 15; // Growing ripples
-                    attack.ripples.push({
-                        x: attack.targetX,
-                        y: attack.targetY,
-                        radius: rippleRadius,
-                        maxRadius: rippleRadius + 30,
-                        opacity: 1.0 - (attack.timer / 120) * 0.7,
-                        timer: 0
-                    });
+                // Create traveling ripples across all levels
+                attack.rippleSpawnTimer++;
+                
+                // Spawn new ripples periodically
+                if (attack.rippleSpawnTimer >= attack.rippleSpawnInterval && 
+                    attack.ripples.length < attack.maxRipples) {
+                    
+                    // Create ripples on all three levels
+                    for (let level = 0; level < 3; level++) {
+                        const levelY = this.levels[level].y + this.levels[level].height / 2;
+                        
+                        attack.ripples.push({
+                            x: this.robber.x + this.robber.width / 2, // Start from mole position
+                            y: levelY,
+                            targetX: attack.targetX, // Travel toward hero's position
+                            targetY: levelY,
+                            radius: 10,
+                            maxRadius: 40,
+                            opacity: 1.0,
+                            timer: 0,
+                            speed: 3, // Pixels per frame
+                            level: level
+                        });
+                    }
+                    
+                    attack.rippleSpawnTimer = 0;
                 }
                 
-                // Move to drilling phase after ripples
-                if (attack.timer >= 120) {
+                // Move to drilling phase after 3 seconds of ripples
+                if (attack.timer >= 180) { // 3 seconds at 60fps
                     attack.phase = 'drilling';
                     attack.timer = 0;
                 }
@@ -1601,11 +1616,27 @@ class Game {
                 }
             }
             
-            // Update ripple animations
+            // Update ripple animations - make them travel horizontally
             attack.ripples = attack.ripples.filter(ripple => {
                 ripple.timer++;
-                ripple.opacity -= 0.02;
-                return ripple.opacity > 0;
+                
+                // Move ripple toward target position
+                const dx = ripple.targetX - ripple.x;
+                const dy = ripple.targetY - ripple.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > ripple.speed) {
+                    // Move toward target
+                    ripple.x += (dx / distance) * ripple.speed;
+                    ripple.y += (dy / distance) * ripple.speed;
+                } else {
+                    // Reached target, start expanding
+                    ripple.radius += 0.5;
+                    ripple.opacity -= 0.02;
+                }
+                
+                // Remove ripple if it's too faded or too large
+                return ripple.opacity > 0 && ripple.radius < ripple.maxRadius;
             });
             
             return true; // Keep this attack
@@ -1657,11 +1688,11 @@ class Game {
     }
     
     molemanStartDrillAttack() {
-        // Start underground drill attack - target where player was standing
+        // Start underground drill attack - create ripples across all levels
         this.playerTargetPosition.x = this.hero.x + this.hero.width / 2;
         this.playerTargetPosition.y = this.hero.y + this.hero.height;
         
-        // Create drill attack sequence
+        // Create drill attack sequence with traveling ripples
         this.drillAttacks.push({
             targetX: this.playerTargetPosition.x,
             targetY: this.playerTargetPosition.y,
@@ -1675,7 +1706,11 @@ class Game {
                 fire: false,
                 scraping: false,
                 burst: false
-            }
+            },
+            // New properties for traveling ripples
+            rippleSpawnTimer: 0,
+            rippleSpawnInterval: 30, // Spawn new ripple every 30 frames (0.5 seconds)
+            maxRipples: 6 // Maximum ripples on screen at once
         });
         
         this.playSound('drillFire'); // Sound 1: Drill firing
@@ -2584,17 +2619,27 @@ class Game {
         // Render underground drill attack with enhanced visual effects
         
         if (attack.phase === 'ripples') {
-            // Render expanding ripples underground with more dramatic effect
+            // Render traveling ripples across all levels
             attack.ripples.forEach(ripple => {
                 this.ctx.save();
                 this.ctx.globalAlpha = ripple.opacity;
                 
-                // Draw large expanding ripples with multiple rings
+                // Draw traveling ripples with multiple rings
                 for (let ring = 0; ring < 3; ring++) {
-                    const ringRadius = ripple.radius - (ring * 8);
+                    const ringRadius = ripple.radius - (ring * 4);
                     if (ringRadius > 0) {
-                        this.ctx.strokeStyle = ring === 0 ? "#8B4513" : ring === 1 ? "#654321" : "#4A2C17";
-                        this.ctx.lineWidth = 4 - ring;
+                        // Different colors for different levels
+                        let color;
+                        if (ripple.level === 0) { // Top level
+                            color = ring === 0 ? "#8B4513" : ring === 1 ? "#654321" : "#4A2C17";
+                        } else if (ripple.level === 1) { // Middle level
+                            color = ring === 0 ? "#A0522D" : ring === 1 ? "#8B4513" : "#654321";
+                        } else { // Bottom level
+                            color = ring === 0 ? "#CD853F" : ring === 1 ? "#A0522D" : "#8B4513";
+                        }
+                        
+                        this.ctx.strokeStyle = color;
+                        this.ctx.lineWidth = 3 - ring;
                         this.ctx.beginPath();
                         this.ctx.arc(ripple.x, ripple.y, ringRadius, 0, Math.PI * 2);
                         this.ctx.stroke();
@@ -2604,18 +2649,21 @@ class Game {
                 this.ctx.restore();
             });
             
-            // Show large warning indicator on ground with pulsing effect
+            // Show warning indicator on hero's current level
+            const heroLevel = this.hero.level;
+            const warningY = this.levels[heroLevel].y + this.levels[heroLevel].height / 2;
+            
             this.ctx.save();
             const pulse = Math.sin(attack.timer * 0.2) * 0.3 + 0.7;
             this.ctx.globalAlpha = pulse;
             this.ctx.fillStyle = "#FF0000"; // Bright red warning
-            this.ctx.fillRect(attack.targetX - 30, attack.targetY - 8, 60, 16);
+            this.ctx.fillRect(attack.targetX - 30, warningY - 8, 60, 16);
             
             // Add warning text
             this.ctx.fillStyle = "#FFFFFF";
             this.ctx.font = "bold 12px Courier New";
             this.ctx.textAlign = "center";
-            this.ctx.fillText("DRILL!", attack.targetX, attack.targetY + 4);
+            this.ctx.fillText("DRILL!", attack.targetX, warningY + 4);
             this.ctx.restore();
             
         } else if (attack.phase === 'drilling') {
