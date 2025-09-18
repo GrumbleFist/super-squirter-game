@@ -1554,13 +1554,8 @@ class Game {
             attack.timer++;
             
             if (attack.phase === 'ripples') {
-                // Create traveling ripples across all levels
-                attack.rippleSpawnTimer++;
-                
-                // Spawn new ripples periodically
-                if (attack.rippleSpawnTimer >= attack.rippleSpawnInterval && 
-                    attack.ripples.length < attack.maxRipples) {
-                    
+                // Create only one ripple at the start of the attack
+                if (!attack.rippleSpawned) {
                     // Create ripple only on the hero's current level - positioned on the floor
                     const heroLevel = this.hero.level;
                     const levelFloorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10; // Floor of hero's level
@@ -1578,7 +1573,7 @@ class Game {
                         level: heroLevel
                     });
                     
-                    attack.rippleSpawnTimer = 0;
+                    attack.rippleSpawned = true; // Mark that ripple has been spawned
                 }
                 
                 // Move to drilling phase after 3 seconds of ripples
@@ -1711,9 +1706,7 @@ class Game {
                 burst: false
             },
             // New properties for traveling ripples
-            rippleSpawnTimer: 0,
-            rippleSpawnInterval: 30, // Spawn new ripple every 30 frames (0.5 seconds)
-            maxRipples: 3 // Maximum ripples on screen at once (reduced since only one level)
+            rippleSpawned: false // Only spawn one ripple per attack
         });
         
         this.playSound('drillFire'); // Sound 1: Drill firing
