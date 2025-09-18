@@ -1064,35 +1064,35 @@ class Game {
             const centerY = bullet.y + bullet.height / 2;
             const radius = Math.max(bullet.width, bullet.height) / 2;
             
-            // Outer fire (bright orange)
-            this.ctx.fillStyle = "#ff4500";
+            // Outer silver (dark gray)
+            this.ctx.fillStyle = "#666666";
             this.ctx.beginPath();
             this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
             this.ctx.fill();
             
-            // Middle fire (yellow-orange)
-            this.ctx.fillStyle = "#ff6600";
+            // Middle silver (medium gray)
+            this.ctx.fillStyle = "#888888";
             this.ctx.beginPath();
             this.ctx.arc(centerX, centerY, radius * 0.7, 0, Math.PI * 2);
             this.ctx.fill();
             
-            // Inner fire (bright yellow)
-            this.ctx.fillStyle = "#ffaa00";
+            // Inner silver (light gray)
+            this.ctx.fillStyle = "#aaaaaa";
             this.ctx.beginPath();
             this.ctx.arc(centerX, centerY, radius * 0.4, 0, Math.PI * 2);
             this.ctx.fill();
             
-            // Core (white-hot)
-            this.ctx.fillStyle = "#ffffff";
+            // Core (bright silver)
+            this.ctx.fillStyle = "#cccccc";
             this.ctx.beginPath();
             this.ctx.arc(centerX, centerY, radius * 0.2, 0, Math.PI * 2);
             this.ctx.fill();
             
-            // Add some flame flicker effect
-            const flicker = Math.sin(Date.now() * 0.01) * 2;
-            this.ctx.fillStyle = "#ff2200";
+            // Add some silver shimmer effect
+            const shimmer = Math.sin(Date.now() * 0.01) * 2;
+            this.ctx.fillStyle = "#999999";
             this.ctx.beginPath();
-            this.ctx.arc(centerX + flicker, centerY, radius * 0.8, 0, Math.PI * 2);
+            this.ctx.arc(centerX + shimmer, centerY, radius * 0.8, 0, Math.PI * 2);
             this.ctx.globalAlpha = 0.6;
             this.ctx.fill();
             this.ctx.globalAlpha = 1.0;
