@@ -33,6 +33,17 @@ class Game {
         this.drillAttacks = []; // Array to track active drill attacks
         this.playerTargetPosition = { x: 0, y: 0 }; // Where player was when drill was fired
         
+        // Death animation system
+        this.deathAnimation = {
+            active: false,
+            timer: 0,
+            duration: 180, // 3 seconds at 60fps
+            rotation: 0,
+            targetY: 0,
+            originalY: 0,
+            falling: false
+        };
+        
         // Victory animation
         this.victoryAnimation = {
             active: false,
@@ -224,6 +235,7 @@ class Game {
         this.sounds.drillFire = this.createDrillFireSound();
         this.sounds.drillScraping = this.createDrillScrapingSound();
         this.sounds.drillBurst = this.createDrillBurstSound();
+        this.sounds.sadTune = this.createSadTune();
     }
     
     createTone(frequency, duration, type = 'sine') {
@@ -597,6 +609,41 @@ class Game {
         };
     }
     
+    createSadTune() {
+        return () => {
+            if (!this.audioContext || !this.soundEnabled) return;
+            
+            // Sad descending melody
+            const notes = [523, 466, 415, 370, 330]; // C5, A#4, G#4, F#4, E4
+            const noteDuration = 0.4;
+            const totalDuration = notes.length * noteDuration;
+            
+            notes.forEach((frequency, index) => {
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                const filter = this.audioContext.createBiquadFilter();
+                
+                oscillator.connect(filter);
+                filter.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                const startTime = this.audioContext.currentTime + (index * noteDuration);
+                
+                oscillator.frequency.setValueAtTime(frequency, startTime);
+                oscillator.type = 'sine';
+                
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(800, startTime);
+                
+                gainNode.gain.setValueAtTime(0.1, startTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + noteDuration);
+                
+                oscillator.start(startTime);
+                oscillator.stop(startTime + noteDuration);
+            });
+        };
+    }
+    
     playSound(soundName) {
         if (this.sounds[soundName] && this.soundEnabled) {
             this.sounds[soundName]();
@@ -633,6 +680,48 @@ class Game {
                 rotation: Math.random() * Math.PI * 2,
                 rotationSpeed: (Math.random() - 0.5) * 0.2
             });
+        }
+    }
+    
+    startDeathAnimation() {
+        this.deathAnimation.active = true;
+        this.deathAnimation.timer = 0;
+        this.deathAnimation.rotation = 0;
+        this.deathAnimation.originalY = this.hero.y;
+        
+        // Calculate target Y position (floor of current level)
+        const heroLevel = this.hero.level;
+        this.deathAnimation.targetY = this.levels[heroLevel].y + this.levels[heroLevel].height - this.hero.height;
+        this.deathAnimation.falling = false;
+        
+        // Play sad tune
+        this.playSound('sadTune');
+    }
+    
+    updateDeathAnimation() {
+        if (!this.deathAnimation.active) return;
+        
+        this.deathAnimation.timer++;
+        
+        // Rotate hero 90 degrees over time
+        this.deathAnimation.rotation = Math.min(this.deathAnimation.timer * 0.05, Math.PI / 2); // 90 degrees
+        
+        // Start falling after 30 frames (0.5 seconds)
+        if (this.deathAnimation.timer > 30) {
+            this.deathAnimation.falling = true;
+        }
+        
+        // Move hero to floor
+        if (this.deathAnimation.falling) {
+            const fallProgress = Math.min((this.deathAnimation.timer - 30) / 60, 1.0); // 1 second fall
+            this.hero.y = this.deathAnimation.originalY + (this.deathAnimation.targetY - this.deathAnimation.originalY) * fallProgress;
+        }
+        
+        // End animation and go to game over
+        if (this.deathAnimation.timer >= this.deathAnimation.duration) {
+            this.deathAnimation.active = false;
+            this.state = GAME_STATES.GAME_OVER;
+            this.playSound('gameOver');
         }
     }
     
@@ -1272,11 +1361,17 @@ class Game {
         // Reset stage 3 intro
         this.stage3Intro.active = false;
         this.stage3Intro.flashTimer = 0;
+        
+        // Reset death animation
+        this.deathAnimation.active = false;
+        this.deathAnimation.timer = 0;
+        this.deathAnimation.rotation = 0;
     }
     
     update() {
-        // Always update victory animation, bonus stage, and stage intros regardless of state
+        // Always update victory animation, death animation, bonus stage, and stage intros regardless of state
         this.updateVictoryAnimation();
+        this.updateDeathAnimation();
         this.updateBonusStage();
         this.updateStage2Intro();
         this.updateStage3Intro();
@@ -1753,8 +1848,7 @@ class Game {
                     this.playSound('hit');
                     
                     if (this.lives <= 0) {
-                        this.state = GAME_STATES.GAME_OVER;
-                        this.playSound('gameOver');
+                        this.startDeathAnimation();
                     }
                 } else {
                     // Hero is jumping over the robot - give bonus points!
@@ -1822,8 +1916,7 @@ class Game {
                     this.playSound('hit');
                     
                     if (this.lives <= 0) {
-                        this.state = GAME_STATES.GAME_OVER;
-                        this.playSound('gameOver');
+                        this.startDeathAnimation();
                     }
                 }
             }
@@ -1859,8 +1952,7 @@ class Game {
                         this.createExplosion(this.hero.x + this.hero.width/2, this.hero.y + this.hero.height/2);
                         
                         if (this.lives <= 0) {
-                            this.state = GAME_STATES.GAME_OVER;
-                            this.playSound('gameOver');
+                            this.startDeathAnimation();
                         }
                     }
                 }
@@ -2367,26 +2459,41 @@ class Game {
         });
         
         // Render hero
+        this.ctx.save();
+        
+        // Apply death animation rotation if active
+        if (this.deathAnimation.active) {
+            this.ctx.translate(this.hero.x + this.hero.width / 2, this.hero.y + this.hero.height / 2);
+            this.ctx.rotate(this.deathAnimation.rotation);
+            this.ctx.translate(-this.hero.width / 2, -this.hero.height / 2);
+        }
+        
         if (this.images.hero) {
-            // Flip image if facing left
-            if (this.hero.direction === -1) {
+            // Flip image if facing left (but not during death animation)
+            if (this.hero.direction === -1 && !this.deathAnimation.active) {
                 this.ctx.save();
                 this.ctx.scale(-1, 1);
                 this.ctx.drawImage(this.images.hero, -(this.hero.x + this.hero.width), this.hero.y, this.hero.width, this.hero.height);
                 this.ctx.restore();
             } else {
-                this.ctx.drawImage(this.images.hero, this.hero.x, this.hero.y, this.hero.width, this.hero.height);
+                const drawX = this.deathAnimation.active ? 0 : this.hero.x;
+                const drawY = this.deathAnimation.active ? 0 : this.hero.y;
+                this.ctx.drawImage(this.images.hero, drawX, drawY, this.hero.width, this.hero.height);
             }
         } else {
             // Fallback to colored rectangle
             this.ctx.fillStyle = this.hero.color;
-            this.ctx.fillRect(this.hero.x, this.hero.y, this.hero.width, this.hero.height);
+            const drawX = this.deathAnimation.active ? 0 : this.hero.x;
+            const drawY = this.deathAnimation.active ? 0 : this.hero.y;
+            this.ctx.fillRect(drawX, drawY, this.hero.width, this.hero.height);
             
             // Hero eyes
             this.ctx.fillStyle = "#000";
-            this.ctx.fillRect(this.hero.x + 5, this.hero.y + 5, 5, 5);
-            this.ctx.fillRect(this.hero.x + 20, this.hero.y + 5, 5, 5);
+            this.ctx.fillRect(drawX + 5, drawY + 5, 5, 5);
+            this.ctx.fillRect(drawX + 20, drawY + 5, 5, 5);
         }
+        
+        this.ctx.restore();
         
         // Render shield
         if (this.hero.shieldActive) {
