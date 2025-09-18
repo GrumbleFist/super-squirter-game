@@ -221,6 +221,9 @@ class Game {
         
         // Drill sound - mechanical drilling noise
         this.sounds.drill = this.createDrillSound();
+        this.sounds.drillFire = this.createDrillFireSound();
+        this.sounds.drillScraping = this.createDrillScrapingSound();
+        this.sounds.drillBurst = this.createDrillBurstSound();
     }
     
     createTone(frequency, duration, type = 'sine') {
@@ -493,6 +496,101 @@ class Game {
             // Volume envelope with mechanical pulsing
             gainNode.gain.setValueAtTime(0.15, this.audioContext.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.05, this.audioContext.currentTime + duration);
+            
+            oscillator.start(this.audioContext.currentTime);
+            oscillator.stop(this.audioContext.currentTime + duration);
+        };
+    }
+    
+    createDrillFireSound() {
+        return () => {
+            if (!this.audioContext || !this.soundEnabled) return;
+            
+            // Sound 1: Drill firing - sharp mechanical click
+            const duration = 0.3;
+            const oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
+            const filter = this.audioContext.createBiquadFilter();
+            
+            oscillator.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            
+            // Sharp mechanical click
+            oscillator.frequency.setValueAtTime(200, this.audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(150, this.audioContext.currentTime + duration);
+            oscillator.type = 'square';
+            
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(100, this.audioContext.currentTime);
+            
+            gainNode.gain.setValueAtTime(0.2, this.audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+            
+            oscillator.start(this.audioContext.currentTime);
+            oscillator.stop(this.audioContext.currentTime + duration);
+        };
+    }
+    
+    createDrillScrapingSound() {
+        return () => {
+            if (!this.audioContext || !this.soundEnabled) return;
+            
+            // Sound 2: Scraping noise as drill travels underground
+            const duration = 1.5;
+            const oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
+            const filter = this.audioContext.createBiquadFilter();
+            
+            oscillator.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            
+            // Scraping/grinding sound
+            oscillator.frequency.setValueAtTime(60, this.audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(80, this.audioContext.currentTime + duration);
+            oscillator.type = 'sawtooth';
+            
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(120, this.audioContext.currentTime);
+            filter.Q.setValueAtTime(3, this.audioContext.currentTime);
+            
+            // Gradual volume increase
+            gainNode.gain.setValueAtTime(0.05, this.audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.15, this.audioContext.currentTime + duration * 0.7);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+            
+            oscillator.start(this.audioContext.currentTime);
+            oscillator.stop(this.audioContext.currentTime + duration);
+        };
+    }
+    
+    createDrillBurstSound() {
+        return () => {
+            if (!this.audioContext || !this.soundEnabled) return;
+            
+            // Sound 3: Burst and damage - explosive impact
+            const duration = 0.8;
+            const oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
+            const filter = this.audioContext.createBiquadFilter();
+            
+            oscillator.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            
+            // Explosive burst sound
+            oscillator.frequency.setValueAtTime(40, this.audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(20, this.audioContext.currentTime + duration);
+            oscillator.type = 'sawtooth';
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(150, this.audioContext.currentTime);
+            filter.Q.setValueAtTime(2, this.audioContext.currentTime);
+            
+            // Sharp impact with decay
+            gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
             
             oscillator.start(this.audioContext.currentTime);
             oscillator.stop(this.audioContext.currentTime + duration);
@@ -1471,6 +1569,12 @@ class Game {
                     attack.timer = 0;
                 }
             } else if (attack.phase === 'drilling') {
+                // Play scraping sound when drilling starts
+                if (!attack.soundPlayed.scraping) {
+                    this.playSound('drillScraping'); // Sound 2: Scraping noise
+                    attack.soundPlayed.scraping = true;
+                }
+                
                 // Drilling phase - show progress for 1.5 seconds
                 attack.drillProgress = Math.min(attack.timer / 90, 1.0); // 1.5 seconds
                 
@@ -1482,6 +1586,12 @@ class Game {
                     attack.timer = 0;
                 }
             } else if (attack.phase === 'burst') {
+                // Play burst sound when burst starts
+                if (!attack.soundPlayed.burst) {
+                    this.playSound('drillBurst'); // Sound 3: Burst and damage
+                    attack.soundPlayed.burst = true;
+                }
+                
                 // Burst phase - dangerous area for 1 second
                 attack.burstTimer++;
                 
@@ -1560,10 +1670,15 @@ class Game {
             ripples: [],
             drillProgress: 0,
             burstActive: false,
-            burstTimer: 0
+            burstTimer: 0,
+            soundPlayed: {
+                fire: false,
+                scraping: false,
+                burst: false
+            }
         });
         
-        this.playSound('drill'); // Drill sound
+        this.playSound('drillFire'); // Sound 1: Drill firing
     }
     
     mutantShootLaser() {
@@ -1692,7 +1807,7 @@ class Game {
                     Math.pow(this.hero.y + this.hero.height/2 - attack.targetY, 2)
                 );
                 
-                if (distance <= 25) {
+                if (distance <= 40) { // Increased damage radius to match visual effect
                     // Check if shield is active
                     if (this.hero.shieldActive) {
                         // Shield blocks the drill burst
@@ -1707,6 +1822,9 @@ class Game {
                         // No shield - hero takes damage
                         this.lives--;
                         this.playSound('hit');
+                        
+                        // Add visual damage feedback
+                        this.createExplosion(this.hero.x + this.hero.width/2, this.hero.y + this.hero.height/2);
                         
                         if (this.lives <= 0) {
                             this.state = GAME_STATES.GAME_OVER;
@@ -2463,48 +2581,54 @@ class Game {
     }
     
     renderDrillAttack(attack) {
-        // Render underground drill attack with ripples and burst
+        // Render underground drill attack with enhanced visual effects
         
         if (attack.phase === 'ripples') {
-            // Render expanding ripples underground
+            // Render expanding ripples underground with more dramatic effect
             attack.ripples.forEach(ripple => {
                 this.ctx.save();
                 this.ctx.globalAlpha = ripple.opacity;
                 
-                // Draw ripple as expanding circles
-                this.ctx.strokeStyle = "#8B4513"; // Brown color
-                this.ctx.lineWidth = 3;
-                this.ctx.beginPath();
-                this.ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
-                this.ctx.stroke();
-                
-                // Add inner circle for depth effect
-                this.ctx.strokeStyle = "#654321"; // Darker brown
-                this.ctx.lineWidth = 1;
-                this.ctx.beginPath();
-                this.ctx.arc(ripple.x, ripple.y, ripple.radius * 0.7, 0, Math.PI * 2);
-                this.ctx.stroke();
+                // Draw large expanding ripples with multiple rings
+                for (let ring = 0; ring < 3; ring++) {
+                    const ringRadius = ripple.radius - (ring * 8);
+                    if (ringRadius > 0) {
+                        this.ctx.strokeStyle = ring === 0 ? "#8B4513" : ring === 1 ? "#654321" : "#4A2C17";
+                        this.ctx.lineWidth = 4 - ring;
+                        this.ctx.beginPath();
+                        this.ctx.arc(ripple.x, ripple.y, ringRadius, 0, Math.PI * 2);
+                        this.ctx.stroke();
+                    }
+                }
                 
                 this.ctx.restore();
             });
             
-            // Show warning indicator on ground
+            // Show large warning indicator on ground with pulsing effect
             this.ctx.save();
-            this.ctx.globalAlpha = 0.8;
-            this.ctx.fillStyle = "#FF4444"; // Red warning
-            this.ctx.fillRect(attack.targetX - 20, attack.targetY - 5, 40, 10);
+            const pulse = Math.sin(attack.timer * 0.2) * 0.3 + 0.7;
+            this.ctx.globalAlpha = pulse;
+            this.ctx.fillStyle = "#FF0000"; // Bright red warning
+            this.ctx.fillRect(attack.targetX - 30, attack.targetY - 8, 60, 16);
+            
+            // Add warning text
+            this.ctx.fillStyle = "#FFFFFF";
+            this.ctx.font = "bold 12px Courier New";
+            this.ctx.textAlign = "center";
+            this.ctx.fillText("DRILL!", attack.targetX, attack.targetY + 4);
             this.ctx.restore();
             
         } else if (attack.phase === 'drilling') {
-            // Show drilling progress with ground cracks
+            // Show dramatic drilling progress with ground upheaval
             this.ctx.save();
-            this.ctx.strokeStyle = "#8B4513";
-            this.ctx.lineWidth = 2;
             
-            // Draw ground cracks spreading from target point
-            const crackLength = attack.drillProgress * 50;
-            for (let i = 0; i < 6; i++) {
-                const angle = (i * Math.PI * 2) / 6;
+            // Draw large ground cracks spreading from target point
+            const crackLength = attack.drillProgress * 80;
+            this.ctx.strokeStyle = "#8B4513";
+            this.ctx.lineWidth = 4;
+            
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * Math.PI * 2) / 8;
                 const startX = attack.targetX;
                 const startY = attack.targetY;
                 const endX = startX + Math.cos(angle) * crackLength;
@@ -2516,44 +2640,82 @@ class Game {
                 this.ctx.stroke();
             }
             
-            // Show drilling indicator
-            this.ctx.fillStyle = "#654321";
-            this.ctx.fillRect(attack.targetX - 15, attack.targetY - 8, 30, 16);
+            // Show large drilling indicator with spinning effect
+            this.ctx.save();
+            this.ctx.translate(attack.targetX, attack.targetY);
+            this.ctx.rotate(attack.timer * 0.3); // Spinning drill
             
+            // Drill body
+            this.ctx.fillStyle = "#8B4513";
+            this.ctx.fillRect(-20, -12, 40, 24);
+            
+            // Drill tip
+            this.ctx.fillStyle = "#654321";
+            this.ctx.fillRect(-20, -12, 20, 24);
+            
+            // Drill spirals
+            this.ctx.strokeStyle = "#FFFFFF";
+            this.ctx.lineWidth = 2;
+            for (let i = 0; i < 4; i++) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(-20, -12 + i * 6);
+                this.ctx.lineTo(20, -12 + i * 6);
+                this.ctx.stroke();
+            }
+            
+            this.ctx.restore();
             this.ctx.restore();
             
         } else if (attack.phase === 'burst') {
-            // Render dangerous drill burst from underground
+            // Render massive dangerous drill burst from underground
             this.ctx.save();
             
-            // Burst effect with multiple drill spikes
-            for (let i = 0; i < 8; i++) {
-                const angle = (i * Math.PI * 2) / 8;
-                const spikeLength = 40 + Math.sin(attack.burstTimer * 0.3) * 10; // Pulsing effect
+            // Screen shake effect
+            const shakeX = (Math.random() - 0.5) * 4;
+            const shakeY = (Math.random() - 0.5) * 4;
+            this.ctx.translate(shakeX, shakeY);
+            
+            // Large burst effect with multiple drill spikes
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * Math.PI * 2) / 12;
+                const spikeLength = 60 + Math.sin(attack.burstTimer * 0.4) * 20; // Bigger pulsing effect
                 const spikeX = attack.targetX + Math.cos(angle) * spikeLength;
                 const spikeY = attack.targetY + Math.sin(angle) * spikeLength;
                 
-                // Draw drill spike
+                // Draw thick drill spike
                 this.ctx.strokeStyle = "#8B4513";
-                this.ctx.lineWidth = 4;
+                this.ctx.lineWidth = 6;
                 this.ctx.beginPath();
                 this.ctx.moveTo(attack.targetX, attack.targetY);
                 this.ctx.lineTo(spikeX, spikeY);
                 this.ctx.stroke();
                 
-                // Add drill tip
+                // Add large drill tip
                 this.ctx.fillStyle = "#654321";
                 this.ctx.beginPath();
-                this.ctx.arc(spikeX, spikeY, 3, 0, Math.PI * 2);
+                this.ctx.arc(spikeX, spikeY, 5, 0, Math.PI * 2);
                 this.ctx.fill();
             }
             
-            // Central burst area
-            this.ctx.fillStyle = "#FF4444"; // Red danger zone
-            this.ctx.globalAlpha = 0.6;
+            // Large central burst area with explosion effect
+            this.ctx.fillStyle = "#FF0000"; // Bright red danger zone
+            this.ctx.globalAlpha = 0.8;
             this.ctx.beginPath();
-            this.ctx.arc(attack.targetX, attack.targetY, 25, 0, Math.PI * 2);
+            this.ctx.arc(attack.targetX, attack.targetY, 40, 0, Math.PI * 2);
             this.ctx.fill();
+            
+            // Add explosion particles
+            for (let i = 0; i < 20; i++) {
+                const angle = (i * Math.PI * 2) / 20;
+                const distance = 30 + Math.random() * 20;
+                const particleX = attack.targetX + Math.cos(angle) * distance;
+                const particleY = attack.targetY + Math.sin(angle) * distance;
+                
+                this.ctx.fillStyle = "#FFAA00";
+                this.ctx.beginPath();
+                this.ctx.arc(particleX, particleY, 2, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
             
             this.ctx.restore();
         }
