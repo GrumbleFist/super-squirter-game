@@ -1042,7 +1042,8 @@ class Game {
             gameOver: 'gameover.png',    // Your game over background image
             // Drill attack images
             drill: 'drill.png',          // Your drill image for mole attacks
-            ripple: 'ripple.png'         // Your ripple image for underground effects
+            ripple: 'ripple.png',        // Your ripple image for underground effects
+            burst: 'burst.png'           // Your burst image for drill explosion
         };
         
         let loadedCount = 0;
@@ -2776,24 +2777,37 @@ class Game {
                 }
             }
             
-            // Large central burst area with explosion effect
-            this.ctx.fillStyle = "#FF0000"; // Bright red danger zone
-            this.ctx.globalAlpha = 0.8;
-            this.ctx.beginPath();
-            this.ctx.arc(attack.targetX, attack.targetY, 40, 0, Math.PI * 2);
-            this.ctx.fill();
-            
-            // Add explosion particles
-            for (let i = 0; i < 20; i++) {
-                const angle = (i * Math.PI * 2) / 20;
-                const distance = 30 + Math.random() * 20;
-                const particleX = attack.targetX + Math.cos(angle) * distance;
-                const particleY = attack.targetY + Math.sin(angle) * distance;
-                
-                this.ctx.fillStyle = "#FFAA00";
+            // Large central burst area with explosion effect using PNG image
+            if (this.images.burst) {
+                // Use burst PNG image for the central explosion
+                const burstSize = 80 + Math.sin(attack.burstTimer * 0.4) * 20; // Pulsing effect
+                this.ctx.drawImage(
+                    this.images.burst,
+                    attack.targetX - burstSize/2,
+                    attack.targetY - burstSize/2,
+                    burstSize,
+                    burstSize
+                );
+            } else {
+                // Fallback to drawn explosion
+                this.ctx.fillStyle = "#FF0000"; // Bright red danger zone
+                this.ctx.globalAlpha = 0.8;
                 this.ctx.beginPath();
-                this.ctx.arc(particleX, particleY, 2, 0, Math.PI * 2);
+                this.ctx.arc(attack.targetX, attack.targetY, 40, 0, Math.PI * 2);
                 this.ctx.fill();
+                
+                // Add explosion particles
+                for (let i = 0; i < 20; i++) {
+                    const angle = (i * Math.PI * 2) / 20;
+                    const distance = 30 + Math.random() * 20;
+                    const particleX = attack.targetX + Math.cos(angle) * distance;
+                    const particleY = attack.targetY + Math.sin(angle) * distance;
+                    
+                    this.ctx.fillStyle = "#FFAA00";
+                    this.ctx.beginPath();
+                    this.ctx.arc(particleX, particleY, 2, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
             }
             
             this.ctx.restore();
