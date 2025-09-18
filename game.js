@@ -1039,7 +1039,10 @@ class Game {
             // Victory screen image
             victory: 'victory.png',     // Your victory background image
             // Game over screen image
-            gameOver: 'gameover.png'    // Your game over background image
+            gameOver: 'gameover.png',    // Your game over background image
+            // Drill attack images
+            drill: 'drill.png',          // Your drill image for mole attacks
+            ripple: 'ripple.png'         // Your ripple image for underground effects
         };
         
         let loadedCount = 0;
@@ -1835,14 +1838,14 @@ class Game {
         
         // Drill attacks vs Hero (only during burst phase)
         this.drillAttacks.forEach((attack, attackIndex) => {
-            if (attack.phase === 'burst' && this.hero.level === 2) {
-                // Check if hero is in the danger zone (25 pixel radius)
+            if (attack.phase === 'burst') {
+                // Check if hero is in the danger zone (40 pixel radius)
                 const distance = Math.sqrt(
                     Math.pow(this.hero.x + this.hero.width/2 - attack.targetX, 2) + 
                     Math.pow(this.hero.y + this.hero.height/2 - attack.targetY, 2)
                 );
                 
-                if (distance <= 40) { // Increased damage radius to match visual effect
+                if (distance <= 40) { // Damage radius to match visual effect
                     // Check if shield is active
                     if (this.hero.shieldActive) {
                         // Shield blocks the drill burst
@@ -2619,30 +2622,42 @@ class Game {
         // Render underground drill attack with enhanced visual effects
         
         if (attack.phase === 'ripples') {
-            // Render traveling ripples across all levels
+            // Render traveling ripples across all levels using PNG images
             attack.ripples.forEach(ripple => {
                 this.ctx.save();
                 this.ctx.globalAlpha = ripple.opacity;
                 
-                // Draw traveling ripples with multiple rings
-                for (let ring = 0; ring < 3; ring++) {
-                    const ringRadius = ripple.radius - (ring * 4);
-                    if (ringRadius > 0) {
-                        // Different colors for different levels
-                        let color;
-                        if (ripple.level === 0) { // Top level
-                            color = ring === 0 ? "#8B4513" : ring === 1 ? "#654321" : "#4A2C17";
-                        } else if (ripple.level === 1) { // Middle level
-                            color = ring === 0 ? "#A0522D" : ring === 1 ? "#8B4513" : "#654321";
-                        } else { // Bottom level
-                            color = ring === 0 ? "#CD853F" : ring === 1 ? "#A0522D" : "#8B4513";
+                // Use ripple PNG image if available
+                if (this.images.ripple) {
+                    const rippleSize = ripple.radius * 2;
+                    this.ctx.drawImage(
+                        this.images.ripple, 
+                        ripple.x - rippleSize/2, 
+                        ripple.y - rippleSize/2, 
+                        rippleSize, 
+                        rippleSize
+                    );
+                } else {
+                    // Fallback to drawn ripples
+                    for (let ring = 0; ring < 3; ring++) {
+                        const ringRadius = ripple.radius - (ring * 4);
+                        if (ringRadius > 0) {
+                            // Different colors for different levels
+                            let color;
+                            if (ripple.level === 0) { // Top level
+                                color = ring === 0 ? "#8B4513" : ring === 1 ? "#654321" : "#4A2C17";
+                            } else if (ripple.level === 1) { // Middle level
+                                color = ring === 0 ? "#A0522D" : ring === 1 ? "#8B4513" : "#654321";
+                            } else { // Bottom level
+                                color = ring === 0 ? "#CD853F" : ring === 1 ? "#A0522D" : "#8B4513";
+                            }
+                            
+                            this.ctx.strokeStyle = color;
+                            this.ctx.lineWidth = 3 - ring;
+                            this.ctx.beginPath();
+                            this.ctx.arc(ripple.x, ripple.y, ringRadius, 0, Math.PI * 2);
+                            this.ctx.stroke();
                         }
-                        
-                        this.ctx.strokeStyle = color;
-                        this.ctx.lineWidth = 3 - ring;
-                        this.ctx.beginPath();
-                        this.ctx.arc(ripple.x, ripple.y, ringRadius, 0, Math.PI * 2);
-                        this.ctx.stroke();
                     }
                 }
                 
@@ -2688,27 +2703,33 @@ class Game {
                 this.ctx.stroke();
             }
             
-            // Show large drilling indicator with spinning effect
+            // Show drilling indicator with spinning effect using PNG image
             this.ctx.save();
             this.ctx.translate(attack.targetX, attack.targetY);
             this.ctx.rotate(attack.timer * 0.3); // Spinning drill
             
-            // Drill body
-            this.ctx.fillStyle = "#8B4513";
-            this.ctx.fillRect(-20, -12, 40, 24);
-            
-            // Drill tip
-            this.ctx.fillStyle = "#654321";
-            this.ctx.fillRect(-20, -12, 20, 24);
-            
-            // Drill spirals
-            this.ctx.strokeStyle = "#FFFFFF";
-            this.ctx.lineWidth = 2;
-            for (let i = 0; i < 4; i++) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(-20, -12 + i * 6);
-                this.ctx.lineTo(20, -12 + i * 6);
-                this.ctx.stroke();
+            // Use drill PNG image if available
+            if (this.images.drill) {
+                this.ctx.drawImage(this.images.drill, -20, -12, 40, 24);
+            } else {
+                // Fallback to drawn drill
+                // Drill body
+                this.ctx.fillStyle = "#8B4513";
+                this.ctx.fillRect(-20, -12, 40, 24);
+                
+                // Drill tip
+                this.ctx.fillStyle = "#654321";
+                this.ctx.fillRect(-20, -12, 20, 24);
+                
+                // Drill spirals
+                this.ctx.strokeStyle = "#FFFFFF";
+                this.ctx.lineWidth = 2;
+                for (let i = 0; i < 4; i++) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(-20, -12 + i * 6);
+                    this.ctx.lineTo(20, -12 + i * 6);
+                    this.ctx.stroke();
+                }
             }
             
             this.ctx.restore();
@@ -2723,26 +2744,36 @@ class Game {
             const shakeY = (Math.random() - 0.5) * 4;
             this.ctx.translate(shakeX, shakeY);
             
-            // Large burst effect with multiple drill spikes
+            // Large burst effect with multiple drill spikes using PNG images
             for (let i = 0; i < 12; i++) {
                 const angle = (i * Math.PI * 2) / 12;
                 const spikeLength = 60 + Math.sin(attack.burstTimer * 0.4) * 20; // Bigger pulsing effect
                 const spikeX = attack.targetX + Math.cos(angle) * spikeLength;
                 const spikeY = attack.targetY + Math.sin(angle) * spikeLength;
                 
-                // Draw thick drill spike
-                this.ctx.strokeStyle = "#8B4513";
-                this.ctx.lineWidth = 6;
-                this.ctx.beginPath();
-                this.ctx.moveTo(attack.targetX, attack.targetY);
-                this.ctx.lineTo(spikeX, spikeY);
-                this.ctx.stroke();
-                
-                // Add large drill tip
-                this.ctx.fillStyle = "#654321";
-                this.ctx.beginPath();
-                this.ctx.arc(spikeX, spikeY, 5, 0, Math.PI * 2);
-                this.ctx.fill();
+                // Use drill PNG image for spikes if available
+                if (this.images.drill) {
+                    this.ctx.save();
+                    this.ctx.translate(spikeX, spikeY);
+                    this.ctx.rotate(angle + Math.PI / 2); // Rotate drill to point outward
+                    this.ctx.drawImage(this.images.drill, -10, -6, 20, 12);
+                    this.ctx.restore();
+                } else {
+                    // Fallback to drawn spikes
+                    // Draw thick drill spike
+                    this.ctx.strokeStyle = "#8B4513";
+                    this.ctx.lineWidth = 6;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(attack.targetX, attack.targetY);
+                    this.ctx.lineTo(spikeX, spikeY);
+                    this.ctx.stroke();
+                    
+                    // Add large drill tip
+                    this.ctx.fillStyle = "#654321";
+                    this.ctx.beginPath();
+                    this.ctx.arc(spikeX, spikeY, 5, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
             }
             
             // Large central burst area with explosion effect
