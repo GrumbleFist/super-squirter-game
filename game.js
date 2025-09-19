@@ -60,8 +60,12 @@ class Game {
             timer: 0,
             duration: 600, // 10 seconds at 60fps
             aquaPower: 0,
-            maxAquaPower: 20, // Need 20 drops to complete
+            maxAquaPower: 15, // Need 15 drops to complete
             heroFlying: false,
+            heroRotation: Math.PI / 2, // Start rotated 90 degrees (flying position)
+            rotationTarget: undefined, // Target rotation for smooth animation
+            rotationSpeed: 0.1, // Speed of rotation animation
+            cloudsMoving: true, // Control cloud movement
             flashTimer: 0,
             flashDuration: 60, // 1 second flash
             clouds: [],
@@ -844,7 +848,7 @@ class Game {
             // Check for raindrop collection
             this.checkRaindropCollection();
             
-            // Check if aqua power is full (30 drops collected)
+            // Check if aqua power is full (15 drops collected)
             if (this.bonusStage.aquaPower >= this.bonusStage.maxAquaPower) {
                 this.bonusStage.flashTimer++;
                 if (this.bonusStage.flashTimer >= this.bonusStage.flashDuration) {
@@ -852,7 +856,7 @@ class Game {
                 }
             }
             
-            // End bonus stage after duration (DISABLED - only end when 20 drops collected)
+            // End bonus stage after duration (DISABLED - only end when 15 drops collected)
             // if (this.bonusStage.timer >= this.bonusStage.duration && this.bonusStage.aquaPower < this.bonusStage.maxAquaPower) {
             //     this.completeBonusStage();
             // }
@@ -892,12 +896,49 @@ class Game {
             this.hero.y += 4;
         }
         
-        // Hero moves quickly right, slowly left (flying effect)
-        if (this.keys['ArrowRight']) {
-            this.hero.x += 6; // Fast right movement
+        // Hero movement depends on rotation for realistic flying physics
+        if (this.bonusStage.cloudsMoving) {
+            const isVertical = this.bonusStage.heroRotation === Math.PI / 2; // 90 degrees = vertical
+            
+            if (this.keys['ArrowRight']) {
+                if (isVertical) {
+                    this.hero.x += 6; // Fast forward when vertical (flying with wind)
+                } else {
+                    this.hero.x += 2; // Slow forward when horizontal (flying against wind)
+                }
+            }
+            if (this.keys['ArrowLeft']) {
+                if (isVertical) {
+                    this.hero.x -= 2; // Slow backward when vertical (flying against wind)
+                } else {
+                    this.hero.x -= 6; // Fast backward when horizontal (flying with wind)
+                }
+            }
         }
-        if (this.keys['ArrowLeft']) {
-            this.hero.x -= 2; // Slow left movement
+        
+        // Space key to stop/start cloud movement
+        if (this.keys['Space']) {
+            this.bonusStage.cloudsMoving = !this.bonusStage.cloudsMoving;
+            this.keys['Space'] = false; // Prevent rapid toggling
+        }
+        
+        // Z key to rotate hero 90 degrees (toggle between flying and upright)
+        if (this.keys['KeyZ']) {
+            // Start smooth rotation animation
+            this.bonusStage.rotationTarget = this.bonusStage.heroRotation === Math.PI / 2 ? 0 : Math.PI / 2;
+            this.bonusStage.rotationSpeed = 0.1; // Rotation speed for smooth transition
+            this.keys['KeyZ'] = false; // Prevent rapid toggling
+        }
+        
+        // Smooth rotation animation
+        if (this.bonusStage.rotationTarget !== undefined) {
+            const rotationDiff = this.bonusStage.rotationTarget - this.bonusStage.heroRotation;
+            if (Math.abs(rotationDiff) > 0.01) {
+                this.bonusStage.heroRotation += rotationDiff * this.bonusStage.rotationSpeed;
+            } else {
+                this.bonusStage.heroRotation = this.bonusStage.rotationTarget;
+                this.bonusStage.rotationTarget = undefined; // Animation complete
+            }
         }
         
         // Keep hero on screen
@@ -931,7 +972,9 @@ class Game {
         
         // Update back cloud positions
         this.bonusStage.backClouds = this.bonusStage.backClouds.filter(cloud => {
-            cloud.x -= cloud.speed;
+            if (this.bonusStage.cloudsMoving) {
+                cloud.x -= cloud.speed;
+            }
             return cloud.x > -400; // Remove when off screen (larger for very large clouds)
         });
     }
@@ -952,7 +995,9 @@ class Game {
         
         // Update cloud positions
         this.bonusStage.clouds = this.bonusStage.clouds.filter(cloud => {
-            cloud.x -= cloud.speed;
+            if (this.bonusStage.cloudsMoving) {
+                cloud.x -= cloud.speed;
+            }
             return cloud.x > -200; // Remove when off screen (increased for bigger clouds)
         });
     }
@@ -981,7 +1026,9 @@ class Game {
         
         // Update front cloud positions
         this.bonusStage.frontClouds = this.bonusStage.frontClouds.filter(cloud => {
-            cloud.x -= cloud.speed;
+            if (this.bonusStage.cloudsMoving) {
+                cloud.x -= cloud.speed;
+            }
             return cloud.x > -200; // Remove when off screen
         });
     }
@@ -1007,8 +1054,10 @@ class Game {
         
         // Update raindrop positions
         this.bonusStage.raindrops = this.bonusStage.raindrops.filter(drop => {
-            drop.x += drop.speedX;
-            drop.y += drop.speedY;
+            if (this.bonusStage.cloudsMoving) {
+                drop.x += drop.speedX;
+            }
+            drop.y += drop.speedY; // Raindrops always fall down
             return drop.x > -20 && drop.y < this.canvas.height + 20; // Remove when off screen
         });
     }
@@ -1016,7 +1065,7 @@ class Game {
     checkRaindropCollection() {
         this.bonusStage.raindrops = this.bonusStage.raindrops.filter(drop => {
             if (this.isColliding(this.hero, drop)) {
-                this.bonusStage.aquaPower += 1; // Collect 1 drop (need 20 total)
+                this.bonusStage.aquaPower += 1; // Collect 1 drop (need 15 total)
                 this.playSound('shoot'); // Use water sound for collection
                 return false; // Remove raindrop
             }
@@ -1405,6 +1454,10 @@ class Game {
         this.bonusStage.timer = 0;
         this.bonusStage.aquaPower = 0;
         this.bonusStage.heroFlying = false;
+        this.bonusStage.heroRotation = Math.PI / 2; // Reset to flying position
+        this.bonusStage.rotationTarget = undefined; // Reset rotation animation
+        this.bonusStage.rotationSpeed = 0.1; // Reset rotation speed
+        this.bonusStage.cloudsMoving = true; // Reset cloud movement
         this.bonusStage.flashTimer = 0;
         this.bonusStage.clouds = [];
         this.bonusStage.raindrops = [];
@@ -1725,97 +1778,74 @@ class Game {
         this.drillAttacks = this.drillAttacks.filter(attack => {
             attack.timer++;
             
-            if (attack.phase === 'traveling') {
-                // Drill moves vertically down to the floor
-                if (attack.drillY < attack.drillTargetY) {
-                    attack.drillY += attack.drillSpeed;
-                } else {
-                    // Drill has reached the floor - move to ripples phase
-                    attack.drillY = attack.drillTargetY;
-                    attack.phase = 'ripples';
+            if (attack.phase === 'drilling') {
+                // Drill moves vertically up and down, can pass between levels
+                attack.drillY += attack.drillSpeed * attack.drillDirection;
+                
+                // Check if drill has reached the hero's level (when fired)
+                const heroLevelTop = this.levels[attack.heroLevelWhenFired].y;
+                const heroLevelBottom = this.levels[attack.heroLevelWhenFired].y + this.levels[attack.heroLevelWhenFired].height;
+                
+                // Check if drill is within the hero's level range
+                if (attack.drillY >= heroLevelTop && attack.drillY <= heroLevelBottom) {
+                    // Drill has reached hero's level - turn into ripple
+                    attack.rippleX = attack.drillX; // Ripple starts where drill reached
+                    attack.phase = 'rippling';
                     attack.timer = 0;
-                }
-            } else if (attack.phase === 'ripples') {
-                // Create ripple when phase starts
-                if (!attack.rippleSpawned) {
-                    const heroLevel = this.hero.level;
-                    
-                    attack.ripples.push({
-                        x: attack.rippleX, // Start where drill landed
-                        y: attack.rippleY, // On the floor
-                        targetX: attack.rippleTargetX, // Move to hero's original position
-                        targetY: attack.rippleY, // Stay on the floor
-                        radius: 40,
-                        maxRadius: 160,
-                        opacity: 1.0,
-                        timer: 0,
-                        speed: attack.rippleSpeed, // 50% faster
-                        level: heroLevel,
-                        moving: true // Ripple is moving horizontally
-                    });
-                    
-                    attack.rippleSpawned = true;
+                    this.playSound('drillScraping');
                 }
                 
-                // Update ripple movement
-                attack.ripples.forEach(ripple => {
-                    if (ripple.moving) {
-                        // Move ripple horizontally toward hero's original position
-                        const dx = ripple.targetX - ripple.x;
-                        if (Math.abs(dx) > ripple.speed) {
-                            ripple.x += (dx > 0 ? ripple.speed : -ripple.speed);
-                        } else {
-                            // Ripple has reached destination - start expanding
-                            ripple.x = ripple.targetX;
-                            ripple.moving = false;
-                        }
+                // Keep drill moving vertically (bounce off screen edges)
+                if (attack.drillY <= 0) {
+                    attack.drillDirection = 1; // Change to moving down
+                } else if (attack.drillY >= this.canvas.height) {
+                    attack.drillDirection = -1; // Change to moving up
+                }
+                
+            } else if (attack.phase === 'rippling') {
+                // Ripple moves across the floor to where hero was when fired
+                const distanceToTarget = Math.abs(attack.rippleX - attack.rippleTargetX);
+                
+                if (distanceToTarget > attack.rippleSpeed) {
+                    // Still moving to target - grow bigger as it travels
+                    if (attack.rippleX < attack.rippleTargetX) {
+                        attack.rippleX += attack.rippleSpeed;
                     } else {
-                        // Ripple is expanding
-                        ripple.radius += 0.5;
-                        ripple.opacity -= 0.02;
+                        attack.rippleX -= attack.rippleSpeed;
                     }
-                });
-                
-                // Move to drilling phase after ripple reaches destination
-                const ripple = attack.ripples[0];
-                if (ripple && !ripple.moving && attack.timer >= 60) { // 1 second after ripple stops moving
-                    attack.phase = 'drilling';
-                    attack.timer = 0;
-                }
-            } else if (attack.phase === 'drilling') {
-                // Play scraping sound when drilling starts
-                if (!attack.soundPlayed.scraping) {
-                    this.playSound('drillScraping'); // Sound 2: Scraping noise
-                    attack.soundPlayed.scraping = true;
-                }
-                
-                // Drilling phase - show progress for 1 second (faster)
-                attack.drillProgress = Math.min(attack.timer / 60, 1.0); // 1 second
-                
-                // Move to burst phase
-                if (attack.timer >= 60) {
-                    attack.phase = 'burst';
-                    attack.burstActive = true;
-                    attack.burstTimer = 0;
-                    attack.timer = 0;
-                }
-            } else if (attack.phase === 'burst') {
-                // Play burst sound when burst starts
-                if (!attack.soundPlayed.burst) {
-                    this.playSound('drillBurst'); // Sound 3: Burst and damage
-                    attack.soundPlayed.burst = true;
+                    
+                    // Make ripple grow bigger as it travels (gradually increase size)
+                    attack.rippleRadius += 0.5; // Grow slowly while traveling
+                } else {
+                    // Ripple has reached target - start expanding
+                    attack.rippleX = attack.rippleTargetX; // Snap to exact position
+                    attack.rippleRadius += attack.rippleSpeed;
+                    
+                    // Move to burst phase when ripple reaches max size
+                    if (attack.rippleRadius >= attack.rippleMaxRadius) {
+                        attack.phase = 'bursting';
+                        attack.timer = 0;
+                        this.playSound('drillBurst');
+                    }
                 }
                 
-                // Burst phase - dangerous area for 0.5 seconds (faster)
+            } else if (attack.phase === 'bursting') {
+                // Burst phase - dangerous area that spins at hero's current height
+                attack.burstRadius += 3;
+                attack.burstRotation += 0.2; // Spinning effect
                 attack.burstTimer++;
                 
-                // End attack after burst phase
+                // Update burst position to hero's current height
+                const currentHeroY = this.hero.y + this.hero.height / 2;
+                attack.rippleY = currentHeroY; // Burst follows hero's current height
+                
+                // Remove attack after burst duration
                 if (attack.burstTimer >= 30) { // 0.5 seconds
-                    return false; // Remove this attack
+                    return false; // Remove attack
                 }
             }
             
-            return true; // Keep this attack
+            return true; // Keep attack
         });
     }
     
@@ -1864,47 +1894,51 @@ class Game {
     }
     
     molemanStartDrillAttack() {
-        // Start underground drill attack - drill moves vertically, ripple moves horizontally
+        // Start underground drill attack - drill moves vertically up/down, passes between levels
         const heroLevel = this.hero.level;
-        const levelFloorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10; // Floor of hero's level
+        const heroLevelY = this.levels[heroLevel].y; // Top of hero's level
+        const heroLevelFloorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10; // Floor of hero's level
         
-        // Store hero's position when gun was fired (for ripple destination)
+        // Store hero's position when drill was fired (for ripple target)
         const heroOriginalX = this.hero.x + this.hero.width / 2;
-        const heroOriginalY = this.hero.y + this.hero.height / 2; // Keep for burst damage calculation
+        const heroOriginalY = this.hero.y + this.hero.height / 2;
         
-        this.playerTargetPosition.x = heroOriginalX;
-        this.playerTargetPosition.y = heroOriginalY;
-        
-        // Create drill attack sequence
+        // Create drill attack
         this.drillAttacks.push({
-            // Drill movement (vertical only)
-            drillX: this.robber.x + this.robber.width / 2, // Start from mole position
-            drillY: this.robber.y + this.robber.height / 2, // Start from mole position
-            drillTargetY: levelFloorY, // Drill moves vertically to floor
-            drillSpeed: 6, // 50% faster (was 4)
+            // Drill starts from mole position
+            drillX: this.robber.x + this.robber.width / 2,
+            drillY: this.robber.y + this.robber.height / 2,
+            drillSpeed: 6, // Vertical movement speed
+            drillDirection: 1, // 1 = down, -1 = up
             
-            // Ripple movement (horizontal only)
-            rippleX: this.robber.x + this.robber.width / 2, // Ripple starts where drill lands
-            rippleY: levelFloorY, // Ripple stays on floor
-            rippleTargetX: heroOriginalX, // Ripple moves to hero's original position
-            rippleSpeed: 4.5, // 50% faster (was 3)
+            // Hero's position when drill was fired (for ripple target)
+            heroOriginalX: heroOriginalX,
+            heroOriginalY: heroOriginalY,
+            heroLevelWhenFired: heroLevel,
+            heroLevelFloorY: heroLevelFloorY,
             
-            // Attack phases
-            phase: 'traveling', // traveling -> ripples -> drilling -> burst
+            // Attack state
+            phase: 'drilling', // Start drilling immediately
             timer: 0,
-            ripples: [],
-            drillProgress: 0,
+            hasReachedHeroLevel: false,
+            
+            // Ripple properties (when drill reaches hero level)
+            rippleX: 0, // Will be set when drill reaches hero level
+            rippleY: heroLevelFloorY, // Ripple moves on the floor
+            rippleRadius: 0,
+            rippleMaxRadius: 60, // 50% larger (was 40)
+            rippleSpeed: 2,
+            rippleTargetX: heroOriginalX, // Move to where hero was when fired
+            
+            // Burst properties
             burstActive: false,
             burstTimer: 0,
-            soundPlayed: {
-                fire: false,
-                scraping: false,
-                burst: false
-            },
-            rippleSpawned: false
+            burstRadius: 0,
+            burstMaxRadius: 60, // 50% larger (was 40)
+            burstRotation: 0 // For spinning effect
         });
         
-        this.playSound('drillFire'); // Sound 1: Drill firing
+        this.playSound('drillFire');
     }
     
     mutantShootLaser() {
@@ -1973,6 +2007,15 @@ class Game {
         this.bullets = [];
         this.robberBullets = [];
         this.drillAttacks = [];
+        
+        // Respawn enemies based on current stage
+        if (this.currentStage === 1) {
+            this.spawnRobots(4); // 4 robots for Stage 1
+        } else if (this.currentStage === 2) {
+            this.spawnRobots(6); // 6 aliens for Stage 2
+        } else if (this.currentStage === 3) {
+            this.spawnRobots(8); // 8 worms for Stage 3
+        }
         
         // Reset death animation
         this.deathAnimation.active = false;
@@ -2066,17 +2109,17 @@ class Game {
             }
         });
         
-        // Drill attacks vs Hero (only during burst phase)
+        // Drill attacks vs Hero (only during bursting phase)
         this.drillAttacks.forEach((attack, attackIndex) => {
-            if (attack.phase === 'burst') {
-                // Check if hero is in the danger zone (40 pixel radius)
-                // Use hero's current position against the burst location
+            if (attack.phase === 'bursting') {
+                // Check if hero is in the danger zone (60 pixel radius - 50% larger)
+                // Burst follows hero's current height, so check horizontal distance
                 const distance = Math.sqrt(
-                    Math.pow(this.hero.x + this.hero.width/2 - attack.rippleTargetX, 2) + 
-                    Math.pow(this.hero.y + this.hero.height/2 - (this.levels[this.hero.level].y + this.levels[this.hero.level].height / 2), 2)
+                    Math.pow(this.hero.x + this.hero.width/2 - attack.rippleX, 2) + 
+                    Math.pow(this.hero.y + this.hero.height/2 - attack.rippleY, 2)
                 );
                 
-                if (distance <= 40) { // Damage radius to match visual effect
+                if (distance <= 60) { // Damage radius to match visual effect (50% larger)
                     // Check if shield is active
                     if (this.hero.shieldActive) {
                         // Shield blocks the drill burst
@@ -2262,17 +2305,45 @@ class Game {
             
             // Render flying hero
             if (this.bonusStage.heroFlying) {
-                // Hero flash effect when aqua power is full
+                // Hero aura effect when aqua power is full - gentle circular glow
                 if (this.bonusStage.aquaPower >= this.bonusStage.maxAquaPower) {
-                    const flash = Math.floor(this.bonusStage.flashTimer / 5) % 2;
-                    this.ctx.fillStyle = flash ? "#0066ff" : "#ffff00";
-                    this.ctx.fillRect(this.hero.x - 5, this.hero.y - 5, this.hero.width + 10, this.hero.height + 10);
+                    this.ctx.save();
+                    const centerX = this.hero.x + this.hero.width / 2;
+                    const centerY = this.hero.y + this.hero.height / 2;
+                    
+                    // Create pulsing aura effect
+                    const pulse = Math.sin(this.bonusStage.flashTimer * 0.1) * 0.3 + 0.7; // 0.4 to 1.0
+                    const radius = 40 * pulse;
+                    
+                    // Outer glow (soft blue)
+                    const gradient = this.ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+                    gradient.addColorStop(0, `rgba(0, 102, 255, ${0.3 * pulse})`);
+                    gradient.addColorStop(0.5, `rgba(0, 102, 255, ${0.15 * pulse})`);
+                    gradient.addColorStop(1, `rgba(0, 102, 255, 0)`);
+                    
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.beginPath();
+                    this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    // Inner glow (soft yellow)
+                    const innerGradient = this.ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 0.6);
+                    innerGradient.addColorStop(0, `rgba(255, 255, 0, ${0.4 * pulse})`);
+                    innerGradient.addColorStop(0.7, `rgba(255, 255, 0, ${0.2 * pulse})`);
+                    innerGradient.addColorStop(1, `rgba(255, 255, 0, 0)`);
+                    
+                    this.ctx.fillStyle = innerGradient;
+                    this.ctx.beginPath();
+                    this.ctx.arc(centerX, centerY, radius * 0.6, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    this.ctx.restore();
                 }
                 
-                // Render hero (rotated for flying)
+                // Render hero (with controllable rotation)
                 this.ctx.save();
                 this.ctx.translate(this.hero.x + this.hero.width / 2, this.hero.y + this.hero.height / 2);
-                this.ctx.rotate(Math.PI / 2); // Rotate 90 degrees for flying
+                this.ctx.rotate(this.bonusStage.heroRotation); // Use controllable rotation
                 
                 if (this.images.hero) {
                     this.ctx.drawImage(this.images.hero, -this.hero.width / 2, -this.hero.height / 2, this.hero.width, this.hero.height);
@@ -2408,8 +2479,8 @@ class Game {
         this.ctx.fillText("AQUA", barX + barWidth / 2, barY - 10);
         this.ctx.fillText("POWER", barX + barWidth / 2, barY - 25);
         
-        // Show progress (X/20)
-        this.ctx.fillText(`${this.bonusStage.aquaPower}/20`, barX + barWidth / 2, barY + barHeight + 20);
+        // Show progress (X/15)
+        this.ctx.fillText(`${this.bonusStage.aquaPower}/15`, barX + barWidth / 2, barY + barHeight + 20);
     }
     
     renderStage2Intro() {
@@ -2876,229 +2947,129 @@ class Game {
     }
     
     renderDrillAttack(attack) {
-        // Render underground drill attack with enhanced visual effects
+        // Drill attack rendering using PNG images (drill.png, ripple.png, burst.png)
         
-        if (attack.phase === 'traveling') {
-            // Render traveling drill (moving vertically down)
+        if (attack.phase === 'drilling') {
+            // Render drill moving vertically down using drill.png (50% larger)
             this.ctx.save();
             
-            // Use drill PNG image if available
             if (this.images.drill) {
-                // Drill points downward (vertical movement)
+                // Use drill.png image (50% larger)
                 this.ctx.translate(attack.drillX, attack.drillY);
                 this.ctx.rotate(Math.PI / 2); // Point downward
                 this.ctx.drawImage(
                     this.images.drill, 
-                    -20, -20, // Center the drill image
-                    40, 40
+                    -30, -30, // Center the drill image (50% larger: was -20, -20)
+                    60, 60    // Size (50% larger: was 40, 40)
                 );
             } else {
                 // Fallback to drawn drill
                 this.ctx.fillStyle = "#8B4513";
                 this.ctx.beginPath();
-                this.ctx.arc(attack.drillX, attack.drillY, 15, 0, Math.PI * 2);
+                this.ctx.arc(attack.drillX, attack.drillY, 22, 0, Math.PI * 2);
                 this.ctx.fill();
                 
-                // Drill tip
                 this.ctx.fillStyle = "#654321";
                 this.ctx.beginPath();
-                this.ctx.arc(attack.drillX, attack.drillY, 8, 0, Math.PI * 2);
+                this.ctx.arc(attack.drillX, attack.drillY, 12, 0, Math.PI * 2);
                 this.ctx.fill();
             }
             
             this.ctx.restore();
-        } else if (attack.phase === 'ripples') {
-            // Render traveling ripples across all levels using PNG images
-            attack.ripples.forEach(ripple => {
-                this.ctx.save();
-                this.ctx.globalAlpha = ripple.opacity;
-                
-                // Use ripple PNG image if available
-                if (this.images.ripple) {
-                    const rippleSize = ripple.radius * 2;
-                    this.ctx.drawImage(
-                        this.images.ripple, 
-                        ripple.x - rippleSize/2, 
-                        ripple.y - rippleSize/2, 
-                        rippleSize, 
-                        rippleSize
-                    );
-                } else {
-                    // Fallback to drawn ripples
-                    for (let ring = 0; ring < 3; ring++) {
-                        const ringRadius = ripple.radius - (ring * 4);
-                        if (ringRadius > 0) {
-                            // Different colors for different levels
-                            let color;
-                            if (ripple.level === 0) { // Top level
-                                color = ring === 0 ? "#8B4513" : ring === 1 ? "#654321" : "#4A2C17";
-                            } else if (ripple.level === 1) { // Middle level
-                                color = ring === 0 ? "#A0522D" : ring === 1 ? "#8B4513" : "#654321";
-                            } else { // Bottom level
-                                color = ring === 0 ? "#CD853F" : ring === 1 ? "#A0522D" : "#8B4513";
-                            }
-                            
-                            this.ctx.strokeStyle = color;
-                            this.ctx.lineWidth = 3 - ring;
-                            this.ctx.beginPath();
-                            this.ctx.arc(ripple.x, ripple.y, ringRadius, 0, Math.PI * 2);
-                            this.ctx.stroke();
-                        }
+            
+        } else if (attack.phase === 'rippling') {
+            // Render ripple moving across floor using ripple.png (50% larger)
+            this.ctx.save();
+            
+            if (this.images.ripple) {
+                // Use ripple.png image (50% larger)
+                const rippleSize = Math.max(attack.rippleRadius * 2, 20); // Minimum size of 20px
+                this.ctx.drawImage(
+                    this.images.ripple, 
+                    attack.rippleX - rippleSize/2, 
+                    attack.rippleY - rippleSize/2, 
+                    rippleSize, 
+                    rippleSize
+                );
+            } else {
+                // Fallback to drawn ripple rings
+                const baseRadius = Math.max(attack.rippleRadius, 10); // Minimum radius of 10px
+                for (let ring = 0; ring < 3; ring++) {
+                    const ringRadius = baseRadius - (ring * 6);
+                    if (ringRadius > 0) {
+                        const colors = ["#8B4513", "#654321", "#4A2C17"];
+                        this.ctx.strokeStyle = colors[ring];
+                        this.ctx.lineWidth = 4 - ring;
+                        this.ctx.beginPath();
+                        this.ctx.arc(attack.rippleX, attack.rippleY, ringRadius, 0, Math.PI * 2);
+                        this.ctx.stroke();
                     }
                 }
-                
-                this.ctx.restore();
-            });
-            
-            // Show warning indicator on hero's current level floor
-            const heroLevel = this.hero.level;
-            const warningY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10; // Floor of hero's level
-            
-            this.ctx.save();
-            const pulse = Math.sin(attack.timer * 0.2) * 0.3 + 0.7;
-            this.ctx.globalAlpha = pulse;
-            this.ctx.fillStyle = "#FF0000"; // Bright red warning
-            this.ctx.fillRect(attack.rippleTargetX - 30, warningY - 8, 60, 16);
-            
-            // Add warning text
-            this.ctx.fillStyle = "#FFFFFF";
-            this.ctx.font = "bold 12px Courier New";
-            this.ctx.textAlign = "center";
-            this.ctx.fillText("DRILL!", attack.rippleTargetX, warningY + 4);
-            this.ctx.restore();
-            
-        } else if (attack.phase === 'drilling') {
-            // Show dramatic drilling progress with ground upheaval
-            this.ctx.save();
-            
-            // Draw large ground cracks spreading from target point on the floor
-            const crackLength = attack.drillProgress * 80;
-            this.ctx.strokeStyle = "#8B4513";
-            this.ctx.lineWidth = 4;
-            
-            // Position cracks on the floor of the hero's level
-            const heroLevel = this.hero.level;
-            const floorY = this.levels[heroLevel].y + this.levels[heroLevel].height - 10;
-            
-            for (let i = 0; i < 8; i++) {
-                const angle = (i * Math.PI * 2) / 8;
-                const startX = attack.rippleTargetX;
-                const startY = floorY;
-                const endX = startX + Math.cos(angle) * crackLength;
-                const endY = floorY + Math.sin(angle) * crackLength;
-                
-                this.ctx.beginPath();
-                this.ctx.moveTo(startX, startY);
-                this.ctx.lineTo(endX, endY);
-                this.ctx.stroke();
-            }
-            
-            // Show drilling indicator with spinning effect using PNG image on the floor
-            this.ctx.save();
-            this.ctx.translate(attack.rippleTargetX, floorY);
-            this.ctx.rotate(attack.timer * 0.3); // Spinning drill
-            
-            // Use drill PNG image if available
-            if (this.images.drill) {
-                this.ctx.drawImage(this.images.drill, -20, -12, 40, 24);
-            } else {
-                // Fallback to drawn drill
-                // Drill body
-                this.ctx.fillStyle = "#8B4513";
-                this.ctx.fillRect(-20, -12, 40, 24);
-                
-                // Drill tip
-                this.ctx.fillStyle = "#654321";
-                this.ctx.fillRect(-20, -12, 20, 24);
-                
-                // Drill spirals
-                this.ctx.strokeStyle = "#FFFFFF";
-                this.ctx.lineWidth = 2;
-                for (let i = 0; i < 4; i++) {
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(-20, -12 + i * 6);
-                    this.ctx.lineTo(20, -12 + i * 6);
-                    this.ctx.stroke();
-                }
             }
             
             this.ctx.restore();
-            this.ctx.restore();
             
-        } else if (attack.phase === 'burst') {
-            // Render massive dangerous drill burst from underground
+        } else if (attack.phase === 'bursting') {
+            // Render spinning burst coming out of ground using burst.png (50% larger)
             this.ctx.save();
             
-            // Screen shake effect
-            const shakeX = (Math.random() - 0.5) * 4;
-            const shakeY = (Math.random() - 0.5) * 4;
-            this.ctx.translate(shakeX, shakeY);
-            
-            // Position burst at the hero's height (middle of the level)
-            const heroLevel = this.hero.level;
-            const heroY = this.levels[heroLevel].y + this.levels[heroLevel].height / 2;
-            
-            // Large burst effect with multiple drill spikes using PNG images
-            for (let i = 0; i < 12; i++) {
-                const angle = (i * Math.PI * 2) / 12;
-                const spikeLength = 60 + Math.sin(attack.burstTimer * 0.4) * 20; // Bigger pulsing effect
-                const spikeX = attack.rippleTargetX + Math.cos(angle) * spikeLength;
-                const spikeY = heroY + Math.sin(angle) * spikeLength;
-                
-                // Use drill PNG image for spikes if available
-                if (this.images.drill) {
-                    this.ctx.save();
-                    this.ctx.translate(spikeX, spikeY);
-                    this.ctx.rotate(angle + Math.PI / 2); // Rotate drill to point outward
-                    this.ctx.drawImage(this.images.drill, -10, -6, 20, 12);
-                    this.ctx.restore();
-                } else {
-                    // Fallback to drawn spikes
-                    // Draw thick drill spike
-                    this.ctx.strokeStyle = "#8B4513";
-                    this.ctx.lineWidth = 6;
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(attack.rippleTargetX, attack.rippleY);
-                    this.ctx.lineTo(spikeX, spikeY);
-                    this.ctx.stroke();
-                    
-                    // Add large drill tip
-                    this.ctx.fillStyle = "#654321";
-                    this.ctx.beginPath();
-                    this.ctx.arc(spikeX, spikeY, 5, 0, Math.PI * 2);
-                    this.ctx.fill();
-                }
-            }
-            
-            // Large central burst area with explosion effect using PNG image on the floor
             if (this.images.burst) {
-                // Use burst PNG image for the central explosion
-                const burstSize = 80 + Math.sin(attack.burstTimer * 0.4) * 20; // Pulsing effect
+                // Use burst.png image with spinning effect (50% larger)
+                this.ctx.translate(attack.rippleX, attack.rippleY);
+                this.ctx.rotate(attack.burstRotation); // Spinning effect
+                
+                const burstSize = attack.burstRadius * 2; // Size based on radius
                 this.ctx.drawImage(
-                    this.images.burst,
-                    attack.rippleTargetX - burstSize/2,
-                    heroY - burstSize/2,
-                    burstSize,
+                    this.images.burst, 
+                    -burstSize/2, 
+                    -burstSize/2, 
+                    burstSize, 
                     burstSize
                 );
             } else {
-                // Fallback to drawn explosion at hero height
-                this.ctx.fillStyle = "#FF0000"; // Bright red danger zone
+                // Fallback to drawn burst
+                this.ctx.translate(attack.rippleX, attack.rippleY);
+                this.ctx.rotate(attack.burstRotation);
+                
+                // Burst area (red danger zone, 50% larger)
+                this.ctx.fillStyle = "#FF0000";
                 this.ctx.globalAlpha = 0.8;
                 this.ctx.beginPath();
-                this.ctx.arc(attack.rippleTargetX, heroY, 40, 0, Math.PI * 2);
+                this.ctx.arc(0, 0, attack.burstRadius, 0, Math.PI * 2);
                 this.ctx.fill();
                 
-                // Add explosion particles
+                // Spinning burst spikes (50% larger)
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i * Math.PI * 2) / 8;
+                    const spikeLength = attack.burstRadius + 10;
+                    const spikeX = Math.cos(angle) * spikeLength;
+                    const spikeY = Math.sin(angle) * spikeLength;
+                    
+                    // Draw spinning spike
+                    this.ctx.strokeStyle = "#FF0000";
+                    this.ctx.lineWidth = 4;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, 0);
+                    this.ctx.lineTo(spikeX, spikeY);
+                    this.ctx.stroke();
+                    
+                    // Spike tip
+                    this.ctx.fillStyle = "#FF0000";
+                    this.ctx.beginPath();
+                    this.ctx.arc(spikeX, spikeY, 4, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                
+                // Burst particles (50% larger)
                 for (let i = 0; i < 20; i++) {
                     const angle = (i * Math.PI * 2) / 20;
-                    const distance = 30 + Math.random() * 20;
-                    const particleX = attack.rippleTargetX + Math.cos(angle) * distance;
-                    const particleY = heroY + Math.sin(angle) * distance;
+                    const distance = 45 + Math.random() * 30;
+                    const particleX = Math.cos(angle) * distance;
+                    const particleY = Math.sin(angle) * distance;
                     
                     this.ctx.fillStyle = "#FFAA00";
                     this.ctx.beginPath();
-                    this.ctx.arc(particleX, particleY, 2, 0, Math.PI * 2);
+                    this.ctx.arc(particleX, particleY, 3, 0, Math.PI * 2);
                     this.ctx.fill();
                 }
             }
@@ -3286,6 +3257,10 @@ class Game {
         this.bonusStage.timer = 0;
         this.bonusStage.aquaPower = 0;
         this.bonusStage.heroFlying = false;
+        this.bonusStage.heroRotation = Math.PI / 2; // Start in flying position
+        this.bonusStage.rotationTarget = undefined; // Start with no rotation animation
+        this.bonusStage.rotationSpeed = 0.1; // Set rotation speed
+        this.bonusStage.cloudsMoving = true; // Start with clouds moving
         this.bonusStage.flashTimer = 0;
         this.bonusStage.clouds = [];
         this.bonusStage.raindrops = [];
