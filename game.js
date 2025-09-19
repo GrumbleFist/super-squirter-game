@@ -2982,8 +2982,10 @@ class Game {
             this.ctx.save();
             
             if (this.images.ripple) {
-                // Use ripple.png image (50% larger)
-                const rippleSize = Math.max(attack.rippleRadius * 2, 20); // Minimum size of 20px
+                // Use ripple.png image with size limit (max 300% of original)
+                const baseSize = 20; // Base size of ripple image
+                const maxSize = baseSize * 3; // 300% maximum size
+                const rippleSize = Math.min(Math.max(attack.rippleRadius * 2, 20), maxSize);
                 this.ctx.drawImage(
                     this.images.ripple, 
                     attack.rippleX - rippleSize/2, 
